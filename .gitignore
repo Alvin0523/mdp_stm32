@@ -12,4 +12,5 @@
 .west/
 zephyr/
 modules/
+micro_ros_zephyr_module/
 build/

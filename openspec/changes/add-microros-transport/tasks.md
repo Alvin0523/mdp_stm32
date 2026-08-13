@@ -1,19 +1,19 @@
 ## 1. Host build dependencies
 
-- [ ] 1.1 Add `catkin_pkg`, `lark-parser`, `empy`, `colcon-common-extensions` to `pixi.toml` `[pypi-dependencies]` (required by the micro-ROS module's colcon build step, per `references/micro_ros_zephyr_module/README.md`)
-- [ ] 1.2 Run `pixi install` and confirm the new deps resolve cleanly
+- [x] 1.1 Add `catkin_pkg`, `lark-parser`, `empy`, `colcon-common-extensions` to `pixi.toml` `[pypi-dependencies]` (required by the micro-ROS module's colcon build step, per `references/micro_ros_zephyr_module/README.md`)
+- [x] 1.2 Run `pixi install` and confirm the new deps resolve cleanly
 
 ## 2. West manifest
 
-- [ ] 2.1 Add the micro-ROS Zephyr module to `app/west.yml`'s manifest, pinned to commit `229ffc0e131ee7942db3bb2e731fb8851583bb25` (the commit already vetted locally at `references/micro_ros_zephyr_module/`, tested against Zephyr v4.0.0)
-- [ ] 2.2 Run `pixi run west-update`, confirm the module fetches into `modules/` alongside the existing `cmsis`/`hal_stm32`/`picolibc`/`segger` modules
-- [ ] 2.3 Register the module in `app/CMakeLists.txt` via `list(APPEND ZEPHYR_EXTRA_MODULES ${CMAKE_CURRENT_SOURCE_DIR}/../modules/libmicroros)` (or the correct relative path — confirm against how `find_package(Zephyr ...)` resolves module paths in this workspace), matching the reference module's own `CMakeLists.txt` pattern
+- [x] 2.1 Add the micro-ROS Zephyr module to `app/west.yml`'s manifest, pinned to commit `229ffc0e131ee7942db3bb2e731fb8851583bb25` (the commit already vetted locally at `references/micro_ros_zephyr_module/`, tested against Zephyr v4.0.0)
+- [x] 2.2 Run `pixi run west-update`, confirm the module fetches (at `micro_ros_zephyr_module/`, sibling to `zephyr/` — not under `modules/`, since the module's own `modules/libmicroros` subfolder is what CMake registers, not the repo root)
+- [x] 2.3 Register the module in `app/CMakeLists.txt` via `list(APPEND ZEPHYR_EXTRA_MODULES ${CMAKE_CURRENT_SOURCE_DIR}/../micro_ros_zephyr_module/modules/libmicroros)`, placed before `find_package(Zephyr REQUIRED ...)` (must be set before Zephyr's build system consumes it)
 
 ## 3. UART transport patch (USART1 → USART3)
 
-- [ ] 3.1 Write `scripts/patch_microros_uart.sh`: idempotent script that changes `#define UART_NODE DT_NODELABEL(usart1)` to `DT_NODELABEL(usart3)` in `modules/libmicroros/microros_transports/serial/microros_transports.c`, following the same pattern (grep-before-patch, clear error if file structure doesn't match) as `scripts/patch_pyocd_runner.sh`
-- [ ] 3.2 Add a `west-patch-microros` pixi task, and add it to the `setup` task's `depends-on` chain (after `west-update`, alongside the existing `west-patch`)
-- [ ] 3.3 Run `pixi run setup` end-to-end on a clean `modules/` (delete and re-fetch) to confirm both patches (pyocd runner + micro-ROS UART) apply cleanly together
+- [x] 3.1 Write `scripts/patch_microros_uart.sh`: idempotent script that changes `#define UART_NODE DT_NODELABEL(usart1)` to `DT_NODELABEL(usart3)` in `micro_ros_zephyr_module/modules/libmicroros/microros_transports/serial/microros_transports.c`, following the same pattern (grep-before-patch, clear error if file structure doesn't match) as `scripts/patch_pyocd_runner.sh`. Verified: applies cleanly, idempotent on rerun.
+- [x] 3.2 Add a `west-patch-microros` pixi task, and add it to the `setup` task's `depends-on` chain (after `west-update`, alongside the existing `west-patch`)
+- [x] 3.3 Run `pixi run setup` end-to-end on a clean `modules/` (delete and re-fetch) to confirm both patches (pyocd runner + micro-ROS UART) apply cleanly together. Verified: both patches applied in order, no conflicts.
 
 ## 4. Kconfig
 

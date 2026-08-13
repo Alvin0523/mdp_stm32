@@ -2,6 +2,8 @@ manifest:
   remotes:
     - name: zephyrproject-rtos
       url-base: https://github.com/zephyrproject-rtos
+    - name: micro-ROS
+      url-base: https://github.com/micro-ROS
 
   projects:
     - name: zephyr
@@ -13,6 +15,9 @@ manifest:
           - hal_stm32      # ST hardware abstraction (STM32F407 drivers/pinctrl/clock)
           - picolibc       # Small C library
           - segger         # SEGGER RTT debug print over ST-LINK
+    - name: micro_ros_zephyr_module
+      remote: micro-ROS
+      revision: 229ffc0e131ee7942db3bb2e731fb8851583bb25
 
   self:
     path: .

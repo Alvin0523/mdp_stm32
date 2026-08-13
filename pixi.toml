@@ -14,9 +14,10 @@ probe = { cmd = 'pyocd list && pyocd cmd -t stm32f407vetx -c "show target;quit"'
 west-init = { cmd = "west init -l app || true", description = "Initialize West workspace from local manifest" }
 west-update = { cmd = "west update", description = "Fetch zephyr + modules" }
 west-patch = { cmd = "bash scripts/patch_pyocd_runner.sh", description = "Patch pyocd runner into stm32f4_disco board.cmake (not upstream in Zephyr v4.0.0)" }
+west-patch-microros = { cmd = "bash scripts/patch_microros_uart.sh", description = "Patch micro-ROS serial transport to USART3 (module hardcodes USART1)" }
 west-export = { cmd = "west zephyr-export", description = "Register Zephyr CMake package" }
 west-sdk = { cmd = "west sdk install -t arm-zephyr-eabi", description = "Install ARM toolchain" }
-setup = { depends-on = ["pack", "west-init", "west-update", "west-patch", "west-export", "west-sdk"], description = "Full one-shot setup: pack, west init/update/export, ARM SDK" }
+setup = { depends-on = ["pack", "west-init", "west-update", "west-patch", "west-patch-microros", "west-export", "west-sdk"], description = "Full one-shot setup: pack, west init/update/export, ARM SDK" }
 
 ## App Build & Flash
 build = { cmd = "west build -b stm32f4_disco app -p", description = "Build app/ for C30D board (STM32F4)" }
@@ -45,3 +46,9 @@ intelhex = "*"
 west = "*"
 pyocd = "*"
 pylink-square = "*"
+
+# micro-ROS Zephyr module build step (colcon builds micro-ROS packages internally)
+catkin_pkg = "*"
+lark-parser = "*"
+empy = "*"
+colcon-common-extensions = "*"

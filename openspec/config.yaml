@@ -1,0 +1,24 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+context: |
+  Read ../docs/architecture.md before proposing anything — the "What's implemented
+  vs. TODO" table there is the source of truth for what to build next. Scope each
+  change to one TODO line, don't bundle multiple.
+  Read ../docs/adr/ for permanent decisions already made (transport, control split,
+  firmware base) — don't relitigate them in a new proposal.
+  Read ../docs/hardware.md for the exact board revision / encoder type on this
+  robot (C30D V2.1, Hall encoder) — firmware written against the wrong variant's
+  pin mapping or encoder decode logic will not work on this hardware.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours

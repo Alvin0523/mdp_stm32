@@ -1,0 +1,15 @@
+.claude/
+.agent/
+
+# editor/tooling caches
+.cache/
+
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+# west workspace (fetched by `pixi run setup` / west update, not source)
+.west/
+zephyr/
+modules/
+build/

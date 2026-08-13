@@ -1,0 +1,47 @@
+[workspace]
+authors = ["Wei Ming <alvinwm0523@gmail.com>"]
+channels = ["conda-forge"]
+name = "mdp_stm32"
+platforms = ["linux-64", "osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+## Hardware Check & Probe
+pack = { cmd = "pyocd pack update && pyocd pack install stm32f407vetx", description = "Install STM32F407 target pack for pyocd" }
+probe = { cmd = 'pyocd list && pyocd cmd -t stm32f407vetx -c "show target;quit"', description = "Detect connected ST-LINK/V2 probe and chip" }
+
+## West Workspace Setup
+west-init = { cmd = "west init -l app || true", description = "Initialize West workspace from local manifest" }
+west-update = { cmd = "west update", description = "Fetch zephyr + modules" }
+west-patch = { cmd = "bash scripts/patch_pyocd_runner.sh", description = "Patch pyocd runner into stm32f4_disco board.cmake (not upstream in Zephyr v4.0.0)" }
+west-export = { cmd = "west zephyr-export", description = "Register Zephyr CMake package" }
+west-sdk = { cmd = "west sdk install -t arm-zephyr-eabi", description = "Install ARM toolchain" }
+setup = { depends-on = ["pack", "west-init", "west-update", "west-patch", "west-export", "west-sdk"], description = "Full one-shot setup: pack, west init/update/export, ARM SDK" }
+
+## App Build & Flash
+build = { cmd = "west build -b stm32f4_disco app -p", description = "Build app/ for C30D board (STM32F4)" }
+flash = { cmd = "west flash -r pyocd", description = "Flash built firmware to board via pyocd (ST-LINK)" }
+rtt = { cmd = "pyocd rtt -t stm32f407vetx", description = "Stream RTT debug logs from STM32" }
+config = { cmd = "west build -t menuconfig", description = "Browse/edit Kconfig options UI" }
+
+[dependencies]
+tio = "*"
+zensical = "*"
+ninja = "*"
+pyelftools = "*"
+pyyaml = "*"
+pykwalify = "*"
+canopen = "*"
+packaging = "*"
+patool = "*"
+psutil = "*"
+pyserial = "*"
+requests = "*"
+semver = "*"
+anytree = "*"
+intelhex = "*"
+
+[pypi-dependencies]
+west = "*"
+pyocd = "*"
+pylink-square = "*"

@@ -18,6 +18,13 @@ extern "C" {
  */
 int motor_init(void);
 
+/**
+ * @brief Drive both rear motors.
+ * @param left_pct  Motor A (rear left) speed, -100..100, negative = reverse.
+ * @param right_pct Motor B (rear right) speed, -100..100, negative = reverse.
+ */
+void motor_set_speed(int16_t left_pct, int16_t right_pct);
+
 #ifdef __cplusplus
 }
 #endif

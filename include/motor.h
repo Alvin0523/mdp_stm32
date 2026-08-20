@@ -25,6 +25,16 @@ int motor_init(void);
  */
 void motor_set_speed(int16_t left_pct, int16_t right_pct);
 
+/**
+ * @brief Read the board's onboard enable/e-stop switch (PD3).
+ * @return 1 if e-stop is engaged (motors should not drive), 0 if ready.
+ *         Wired as input pull-up per vendor reference; polarity (switch-to-
+ *         GND = engaged) is assumed from the vendor schematic and not yet
+ *         physically verified on this board - flip the comparison in
+ *         motor.c if it reads backwards.
+ */
+uint8_t motor_estop_engaged(void);
+
 #ifdef __cplusplus
 }
 #endif

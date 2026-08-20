@@ -15,6 +15,8 @@
 
 static TIM_HandleTypeDef s_htim2;
 static TIM_HandleTypeDef s_htim3;
+static int32_t s_total_a = 0;
+static int32_t s_total_b = 0;
 
 static void encoder_timer_init(TIM_HandleTypeDef *htim, TIM_TypeDef *instance)
 {
@@ -74,6 +76,7 @@ int32_t encoder_get_delta_a(void)
 {
     int16_t count = (int16_t)__HAL_TIM_GET_COUNTER(&s_htim2);
     __HAL_TIM_SET_COUNTER(&s_htim2, 0);
+    s_total_a += count;
     return count;
 }
 
@@ -81,5 +84,16 @@ int32_t encoder_get_delta_b(void)
 {
     int16_t count = (int16_t)__HAL_TIM_GET_COUNTER(&s_htim3);
     __HAL_TIM_SET_COUNTER(&s_htim3, 0);
+    s_total_b += count;
     return count;
+}
+
+int32_t encoder_get_count_a(void)
+{
+    return s_total_a;
+}
+
+int32_t encoder_get_count_b(void)
+{
+    return s_total_b;
 }

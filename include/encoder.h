@@ -23,6 +23,14 @@ void encoder_init(void);
 int32_t encoder_get_delta_a(void); /* Motor A, rear left */
 int32_t encoder_get_delta_b(void); /* Motor B, rear right */
 
+/**
+ * @brief Cumulative tick count since boot (running total of every delta
+ * returned by encoder_get_delta_a/b so far). Does not reset the hardware
+ * counter, safe to call independently of the delta reads.
+ */
+int32_t encoder_get_count_a(void);
+int32_t encoder_get_count_b(void);
+
 #ifdef __cplusplus
 }
 #endif

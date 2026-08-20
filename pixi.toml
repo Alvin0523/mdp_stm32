@@ -12,6 +12,7 @@ probe = { cmd = 'pio pkg exec -p tool-openocd -- openocd -f interface/stlink.cfg
 ## App Build & Flash (PlatformIO)
 build = { cmd = "pio run", description = "Build firmware via PlatformIO" }
 flash = { cmd = "pio run -t upload", description = "Flash firmware to board via ST-LINK (OpenOCD)" }
+monitor = { cmd = "pio device monitor", description = "Open serial monitor (baud/port from platformio.ini)" }
 
 [dependencies]
 tio = "*"

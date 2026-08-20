@@ -2,7 +2,7 @@
 authors = ["Wei Ming <alvinwm0523@gmail.com>"]
 channels = ["conda-forge"]
 name = "mdp_stm32"
-platforms = ["linux-64", "osx-arm64"]
+platforms = ["linux-64", "osx-arm64",'linux-aarch64']
 version = "0.1.0"
 
 [tasks]
@@ -15,6 +15,5 @@ flash = { cmd = "pio run -t upload", description = "Flash firmware to board via 
 monitor = { cmd = "pio device monitor", description = "Open serial monitor (baud/port from platformio.ini)" }
 
 [dependencies]
-tio = "*"
 pyserial = "*"
 platformio = "*"

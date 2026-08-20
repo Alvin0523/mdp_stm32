@@ -10,6 +10,8 @@
 #include "oled.h"
 #include "button.h"
 #include "imu.h"
+#include "servo.h"
+#include "encoder.h"
 
 void SystemClock_Config(void);
 
@@ -35,8 +37,10 @@ int main(void)
     /* Initialize Peripherals: USART3, Motors, OLED, PE0 Button, ICM-20948 IMU */
     MX_USART3_UART_Init();
     motor_init();
+    encoder_init();
     oled_init();
     button_init();
+    servo_init();
     int imu_status = imu_init();
 
     printf("\r\n=======================================================\r\n");

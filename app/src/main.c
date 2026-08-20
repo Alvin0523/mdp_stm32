@@ -30,6 +30,11 @@ int main(void)
 
 	while (1) {
 		gpio_pin_toggle_dt(&led);
+
+		/* Mirrored left/right motors need opposite signs for forward travel. */
+		motor_set_speed(MOTOR_A, 0);
+		motor_set_speed(MOTOR_B, 0);
+		encoder_reset_counts();
 		k_msleep(500);
 	}
 

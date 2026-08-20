@@ -13,6 +13,7 @@
  */
 
 #include "button.h"
+#include "encoder.h"
 #include "oled.h"
 
 static uint32_t s_last_button_tick = 0;
@@ -45,6 +46,8 @@ void EXTI0_IRQHandler(void)
  */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
+    encoder_handle_exti(GPIO_Pin);
+
     if (GPIO_Pin == GPIO_PIN_0) {
         /* Debounce button press (200ms cooldown) */
         uint32_t now = HAL_GetTick();

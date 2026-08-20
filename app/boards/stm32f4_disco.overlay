@@ -63,11 +63,3 @@
 	};
 };
 
-&timers1 {
-	status = "okay";
-	motor_cd_pwm: pwm {
-		status = "okay";
-		pinctrl-0 = <&tim1_ch1_pe9 &tim1_ch2_pe11 &tim1_ch3_pe13 &tim1_ch4_pe14>;
-		pinctrl-names = "default";
-	};
-};

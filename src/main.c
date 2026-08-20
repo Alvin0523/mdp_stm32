@@ -7,6 +7,7 @@
 #include "stm32f4xx_hal.h"
 #include "usart.h"
 #include "motor.h"
+#include "encoder.h"
 #include "oled.h"
 #include "button.h"
 #include "imu.h"
@@ -34,7 +35,35 @@ int main(void)
 
     /* Initialize Peripherals: USART3, Motors, OLED, PE0 Button, ICM-20948 IMU */
     MX_USART3_UART_Init();
-    motor_init();
+
+    if (motor_init() != 0) {
+        printf("Motor PWM initialization failed\r\n");
+        while (1) {
+            HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_8);
+            HAL_Delay(100);
+        }
+    }
+
+    encoder_init();
+
+    /* Servo test: direct pulses, avoiding angle conversion during diagnosis. */
+    /* Keep the traction motors stopped while checking steering power. */
+    motor_set_speed(MOTOR_A, 0);
+    motor_set_speed(MOTOR_B, 0);
+    printf("[Steering] command 1000 us\r\n");
+    motor_set_steering_pulse_us(1000U);
+    HAL_Delay(2000);
+    printf("[Steering] command 1500 us\r\n");
+    motor_set_steering_pulse_us(1500U);
+    HAL_Delay(2000);
+    printf("[Steering] command 2000 us\r\n");
+    motor_set_steering_pulse_us(2000U);
+    HAL_Delay(2000);
+    printf("[Steering] command 1500 us\r\n");
+    motor_set_steering_pulse_us(1500U);
+
+    float steering_angle_rad = 0.0f;
+
     oled_init();
     button_init();
     int imu_status = imu_init();
@@ -45,14 +74,25 @@ int main(void)
     printf("  IMU Sensor: ICM-20948 (I2C2 PB10/PB11) -> %s        \r\n", imu_status == 0 ? "DETECTED OK" : "NOT DETECTED");
     printf("  OLED: 0.96-inch 128x64 (PD11/12/13/14)                \r\n");
     printf("  Button: PE0 EXTI Interrupt (Page Switcher)            \r\n");
+    printf("[Steering] commanded angle: %.3f rad / %.1f deg\r\n",
+        steering_angle_rad, steering_angle_rad * 57.2958f);
     printf("=======================================================\r\n\r\n");
 
     uint32_t loop_count = 0;
+    uint32_t last_encoder_report = 0;
 
     while (1)
     {
         HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_8); // Toggle PE8 LED
         loop_count++;
+
+        if (HAL_GetTick() - last_encoder_report >= 1000) {
+            int32_t left_count = encoder_get_left_count();
+            int32_t right_count = encoder_get_right_count();
+            printf("[Encoders] left=%ld right=%ld\r\n",
+                   (long)left_count, (long)right_count);
+            last_encoder_report = HAL_GetTick();
+        }
 
         /* Update IMU telemetry */
         imu_update();
@@ -71,7 +111,10 @@ int main(void)
 
             case 2:
                 /* Page 3: Safety & Hardware Diagnostics */
-                oled_render_page3(0, 14500, 14480, loop_count / 2);
+                oled_render_page3(0,
+                                  encoder_get_left_count(),
+                                  encoder_get_right_count(),
+                                  loop_count / 2);
                 break;
 
             case 3:
@@ -84,8 +127,8 @@ int main(void)
                 break;
         }
 
-        printf("[IMU Telemetry] Yaw: %+6.1f deg | GyroZ: %+6.1f deg/s | AccelX: %+5.2f m/s^2 | Page: %d\r\n",
-               g_imu_data.yaw, g_imu_data.gyro_z, g_imu_data.accel_x, g_oled_page + 1);
+        // printf("[IMU Telemetry] Yaw: %+6.1f deg | GyroZ: %+6.1f deg/s | AccelX: %+5.2f m/s^2 | Page: %d\r\n",
+        //        g_imu_data.yaw, g_imu_data.gyro_z, g_imu_data.accel_x, g_oled_page + 1);
 
         HAL_Delay(100); /* 10 Hz refresh rate for smooth IMU telemetry */
     }

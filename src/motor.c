@@ -82,7 +82,22 @@ int motor_init(void)
     motor_pwm_channel_start(&s_htim9, TIM_CHANNEL_1);
     motor_pwm_channel_start(&s_htim9, TIM_CHANNEL_2);
 
+    /* Step 5: Onboard enable/e-stop switch, PD3, input with pull-up
+     * (per vendor reference "Enable_Pin" init) */
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+    GPIO_InitStruct.Pin = GPIO_PIN_3;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
     return 0;
+}
+
+uint8_t motor_estop_engaged(void)
+{
+    /* Assumed: switch pulls the pin low when engaged (pull-up idles high).
+     * Verify against the physical switch and flip if backwards. */
+    return HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_3) == GPIO_PIN_RESET ? 1 : 0;
 }
 
 static void motor_drive(TIM_HandleTypeDef *htim_in1, uint32_t ch_in1,

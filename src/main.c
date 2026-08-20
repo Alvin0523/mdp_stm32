@@ -53,6 +53,11 @@ int main(void)
 
     uint32_t loop_count = 0;
 
+    /* Commanded steering angle. No RC/UART steering command source exists
+     * yet, so this stays centered - but it's the actual value applied to
+     * the servo below, not a value independently faked for the display. */
+    float steer_deg = 0.0f;
+
     while (1)
     {
         HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_8); // Toggle PE8 LED
@@ -61,21 +66,36 @@ int main(void)
         /* Update IMU telemetry */
         imu_update();
 
+        /* Sample rear wheel encoders: delta since last read (this loop is
+         * 10Hz, so delta*10 = ticks/sec) and running cumulative totals. */
+        int32_t enc_delta_left = encoder_get_delta_a();
+        int32_t enc_delta_right = encoder_get_delta_b();
+
+        servo_set_angle(steer_deg);
+
         /* Render Current OLED Display Page based on g_oled_page */
         switch (g_oled_page) {
             case 0:
-                /* Page 1: Primary Drive & Battery Status */
-                oled_render_page1(12.4f, 0.25f, 0.25f, +0.0f, g_imu_data.yaw);
+                /* Page 1: Primary Drive & Battery Status
+                 * NOTE: battery_v is still a placeholder - no ADC driver
+                 * wired up yet (PB0/ADC1_IN8 per the resource sheet), and
+                 * the sense-resistor divider ratio isn't confirmed from the
+                 * schematic, so a computed voltage would just be a guess.
+                 * left/right are real encoder tick-rates (ticks/sec), not
+                 * calibrated m/s (no confirmed wheel diameter/gear ratio). */
+                oled_render_page1(12.4f, (float)(enc_delta_left * 10), (float)(enc_delta_right * 10), steer_deg, g_imu_data.yaw);
                 break;
 
             case 1:
-                /* Page 2: Distance Sensors (Ultrasonic & IR) */
+                /* Page 2: Distance Sensors (Ultrasonic & IR)
+                 * NOTE: still fully fake - no ultrasonic/IR driver exists
+                 * in this project yet. */
                 oled_render_page2(18.5f, 22.0f, 24.5f);
                 break;
 
             case 2:
                 /* Page 3: Safety & Hardware Diagnostics */
-                oled_render_page3(0, 14500, 14480, loop_count / 2);
+                oled_render_page3(motor_estop_engaged(), encoder_get_count_a(), encoder_get_count_b(), loop_count / 2);
                 break;
 
             case 3:

@@ -53,10 +53,15 @@ int main(void)
 
     uint32_t loop_count = 0;
 
-    /* Commanded steering angle. No RC/UART steering command source exists
-     * yet, so this stays centered - but it's the actual value applied to
-     * the servo below, not a value independently faked for the display. */
+    /* Steering angle currently applied to the servo. Driven by the host's
+     * command packet (see protocol.h) when the link is alive; centered as
+     * a fail-safe when the host command goes stale (link lost). */
     float steer_deg = 0.0f;
+
+    /* PROTOCOL_COMMAND_TIMEOUT_MS: if no valid command packet arrives from
+     * the host within this window, stop driving (fail safe) rather than
+     * keep coasting on the last-received setpoint. */
+    #define PROTOCOL_COMMAND_TIMEOUT_MS 500U
 
     while (1)
     {
@@ -71,7 +76,34 @@ int main(void)
         int32_t enc_delta_left = encoder_get_delta_a();
         int32_t enc_delta_right = encoder_get_delta_b();
 
+        /* Apply the host's latest command, or fail safe if the serial link
+         * has gone stale (no valid packet within the timeout window). */
+        if (uart_command_is_stale(PROTOCOL_COMMAND_TIMEOUT_MS)) {
+            motor_set_speed(0, 0);
+            steer_deg = 0.0f;
+        } else {
+            command_packet_t cmd = g_last_command;
+            motor_set_speed_rad_s(cmd.left_wheel_rad_s, cmd.right_wheel_rad_s);
+            steer_deg = cmd.steer_rad * (180.0f / 3.14159265f);
+        }
         servo_set_angle(steer_deg);
+
+        /* Send telemetry to the host every loop tick. */
+        telemetry_packet_t telemetry = {0};
+        telemetry.enc_left = encoder_get_count_a();
+        telemetry.enc_right = encoder_get_count_b();
+        telemetry.steer_deg = steer_deg;
+        telemetry.accel_x = g_imu_data.accel_x;
+        telemetry.accel_y = g_imu_data.accel_y;
+        telemetry.accel_z = g_imu_data.accel_z;
+        telemetry.gyro_x = g_imu_data.gyro_x;
+        telemetry.gyro_y = g_imu_data.gyro_y;
+        telemetry.gyro_z = g_imu_data.gyro_z;
+        telemetry.yaw_deg = g_imu_data.yaw;
+        telemetry.imu_ready = g_imu_data.ready;
+        telemetry.estop = motor_estop_engaged();
+        telemetry.uptime_ms = HAL_GetTick();
+        uart_send_telemetry(&telemetry);
 
         /* Render Current OLED Display Page based on g_oled_page */
         switch (g_oled_page) {

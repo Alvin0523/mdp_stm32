@@ -124,3 +124,23 @@ void motor_set_speed(int16_t left_pct, int16_t right_pct)
     /* Motor B (rear right): IN1 = TIM9_CH1 (PE5), IN2 = TIM9_CH2 (PE6) */
     motor_drive(&s_htim9, TIM_CHANNEL_1, &s_htim9, TIM_CHANNEL_2, right_pct);
 }
+
+/* MG513P3012V drive motor: 1:30 gear ratio, 330 RPM max output shaft speed
+ * per the official course component spec (docs/hardware.md). Wheel is
+ * mounted directly on the output shaft, so this is also the max wheel
+ * speed: 330 RPM * 2*pi/60 = ~34.56 rad/s. Open-loop estimate only - real
+ * max speed varies with battery voltage and load. */
+#define MOTOR_MAX_WHEEL_RAD_S 34.56f
+
+static int16_t rad_s_to_pct(float rad_s)
+{
+    float pct = (rad_s / MOTOR_MAX_WHEEL_RAD_S) * 100.0f;
+    if (pct > 100.0f) pct = 100.0f;
+    if (pct < -100.0f) pct = -100.0f;
+    return (int16_t)pct;
+}
+
+void motor_set_speed_rad_s(float left_rad_s, float right_rad_s)
+{
+    motor_set_speed(rad_s_to_pct(left_rad_s), rad_s_to_pct(right_rad_s));
+}

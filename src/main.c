@@ -12,6 +12,7 @@
 #include "imu.h"
 #include "servo.h"
 #include "encoder.h"
+#include "selftest.h"
 
 void SystemClock_Config(void);
 
@@ -50,6 +51,10 @@ int main(void)
     printf("  OLED: 0.96-inch 128x64 (PD11/12/13/14)                \r\n");
     printf("  Button: PE0 EXTI Interrupt (Page Switcher)            \r\n");
     printf("=======================================================\r\n\r\n");
+
+    /* Hold PE0 (user button) at boot to run the drive/steer self-test
+     * before entering the main loop - see docs/stm32/protocol.md. */
+    selftest_run_if_requested();
 
     uint32_t loop_count = 0;
 

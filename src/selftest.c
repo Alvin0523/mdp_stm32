@@ -74,6 +74,11 @@ void selftest_run_if_requested(void)
         return; /* PE0 not held (pull-up idles high, pressed = low) */
     }
 
+    selftest_run();
+}
+
+void selftest_run(void)
+{
     if (motor_estop_engaged()) {
         blink_pe8(5, 100, 100); /* refused */
         return;

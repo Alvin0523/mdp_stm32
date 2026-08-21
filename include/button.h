@@ -17,6 +17,12 @@ extern "C" {
  */
 void button_init(void);
 
+/**
+ * @brief Check and clear a pending self-test request raised by a PE0 press.
+ * @return 1 if a press was pending (and is now cleared), 0 otherwise.
+ */
+uint8_t button_consume_selftest_request(void);
+
 #ifdef __cplusplus
 }
 #endif

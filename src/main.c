@@ -68,10 +68,28 @@ int main(void)
      * keep coasting on the last-received setpoint. */
     #define PROTOCOL_COMMAND_TIMEOUT_MS 500U
 
+    /* OLED pages auto-advance on this cadence when nobody's pressed the
+     * button; a self-test run also resets it so the display doesn't flip
+     * mid-way through reading the just-finished results. */
+    #define OLED_AUTO_PAGE_MS 5000U
+    uint32_t last_page_change_tick = HAL_GetTick();
+
     while (1)
     {
         HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_8); // Toggle PE8 LED
         loop_count++;
+
+        /* PE0 press during normal operation triggers the self-test
+         * sequence (run here, outside the ISR, since it blocks). */
+        if (button_consume_selftest_request()) {
+            selftest_run();
+            last_page_change_tick = HAL_GetTick();
+        }
+
+        if (HAL_GetTick() - last_page_change_tick >= OLED_AUTO_PAGE_MS) {
+            oled_next_page();
+            last_page_change_tick = HAL_GetTick();
+        }
 
         /* Update IMU telemetry */
         imu_update();

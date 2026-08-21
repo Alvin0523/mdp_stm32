@@ -9,13 +9,24 @@
  *
  * 2. EXTI0 Interrupt:
  *    When PE0 is pressed (pulled to GND), the hardware generates EXTI Line 0 Interrupt.
- *    EXTI0_IRQHandler() handles the interrupt and calls oled_next_page() to cycle OLED pages!
+ *    EXTI0_IRQHandler() only raises a flag here - the actual self-test
+ *    sequence runs from the main loop, since it blocks on HAL_Delay/motor
+ *    control and must not run inside an ISR.
  */
 
 #include "button.h"
-#include "oled.h"
 
 static uint32_t s_last_button_tick = 0;
+static volatile uint8_t s_selftest_requested = 0;
+
+uint8_t button_consume_selftest_request(void)
+{
+    if (s_selftest_requested) {
+        s_selftest_requested = 0;
+        return 1;
+    }
+    return 0;
+}
 
 void button_init(void)
 {
@@ -50,7 +61,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         uint32_t now = HAL_GetTick();
         if (now - s_last_button_tick > 200) {
             s_last_button_tick = now;
-            oled_next_page(); /* Cycle OLED display page */
+            s_selftest_requested = 1; /* run self-test from the main loop */
         }
     }
 }

@@ -18,6 +18,13 @@ extern "C" {
  */
 void selftest_run_if_requested(void);
 
+/**
+ * @brief Run the self-test sequence unconditionally (e.g. triggered by a
+ * PE0 press during normal operation). Refuses (blinks 5x) if the PD3
+ * e-stop switch is engaged.
+ */
+void selftest_run(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -50,14 +50,30 @@ static void drive_ticks(int16_t pct, int32_t target_ticks)
     encoder_get_delta_a();
     encoder_get_delta_b();
 
-    int32_t accumulated = 0;
+    /* Track and stop each wheel independently - motors are never perfectly
+     * matched, so averaging left+right (the old approach) could stop one
+     * wheel short of a full revolution while overshooting the other. */
+    int32_t accumulated_a = 0;
+    int32_t accumulated_b = 0;
+    uint8_t done_a = 0;
+    uint8_t done_b = 0;
     uint32_t start_tick = HAL_GetTick();
 
     motor_set_speed(pct, pct);
-    while (accumulated < target_ticks) {
-        int32_t delta_a = encoder_get_delta_a();
-        int32_t delta_b = encoder_get_delta_b();
-        accumulated += (labs(delta_a) + labs(delta_b)) / 2;
+    while (!done_a || !done_b) {
+        if (!done_a) {
+            accumulated_a += labs(encoder_get_delta_a());
+            if (accumulated_a >= target_ticks) {
+                done_a = 1;
+            }
+        }
+        if (!done_b) {
+            accumulated_b += labs(encoder_get_delta_b());
+            if (accumulated_b >= target_ticks) {
+                done_b = 1;
+            }
+        }
+        motor_set_speed(done_a ? 0 : pct, done_b ? 0 : pct);
 
         if (HAL_GetTick() - start_tick > SELFTEST_DRIVE_TIMEOUT_MS) {
             break; /* wheels not turning (off ground / stuck?) - don't hang forever */

@@ -11,17 +11,8 @@ probe = { cmd = 'pio pkg exec -p tool-openocd -- openocd -f interface/stlink.cfg
 
 ## App Build & Flash (PlatformIO)
 build = { cmd = "pio run", description = "Build firmware via PlatformIO" }
-flash = { cmd = "bash scripts/flash-with-unblock.sh", description = "Flash firmware via ST-LINK - auto-unblocks it first, always re-blocks after (see stlink-block/stlink-unblock)" }
+flash = { cmd = "pio run -t upload", description = "Flash firmware to board via ST-LINK (OpenOCD)" }
 monitor = { cmd = "pio device monitor", description = "Open serial monitor (baud/port from platformio.ini)" }
-
-## ST-Link USB block/unblock (see docs/troubleshooting.md) - the board can
-## get stuck in its bootloader on reset if the ST-Link stays connected;
-## these let you deauthorize/reauthorize it at the USB level instead of
-## physically unplugging the cable. stlink-install-udev is one-time setup
-## (needs sudo); stlink-block/stlink-unblock need no sudo afterward.
-stlink-install-udev = { cmd = "sudo bash scripts/install-stlink-udev-rule.sh", description = "One-time (needs sudo): let stlink-block/stlink-unblock work without sudo" }
-stlink-block = { cmd = "bash scripts/stlink-block.sh", description = "Deauthorize the ST-Link at the USB level (acts as unplugged) so the board boots normally" }
-stlink-unblock = { cmd = "bash scripts/stlink-unblock.sh", description = "Reauthorize a blocked ST-Link so it's usable again for probe/build/flash" }
 
 [dependencies]
 pyserial = "*"

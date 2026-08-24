@@ -22,7 +22,11 @@ ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="3748"
 EOF
 
 udevadm control --reload-rules
-udevadm trigger --subsystem-match=usb
+# The rule only matches ACTION=="add" - a plain `udevadm trigger` defaults
+# to simulating a "change" event, which would silently NOT apply the rule
+# to an already-connected ST-Link. Force a genuine "add" re-trigger instead
+# of requiring a physical replug.
+udevadm trigger --action=add --subsystem-match=usb --attr-match=idVendor=0483 --attr-match=idProduct=3748
 
 echo "Installed $RULE_FILE"
-echo "Replug the ST-Link (or run: sudo udevadm trigger) for it to take effect immediately."
+echo "Applied immediately to any already-connected ST-Link - no replug needed."

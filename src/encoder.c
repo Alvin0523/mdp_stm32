@@ -84,8 +84,15 @@ int32_t encoder_get_delta_b(void)
 {
     int16_t count = (int16_t)__HAL_TIM_GET_COUNTER(&s_htim3);
     __HAL_TIM_SET_COUNTER(&s_htim3, 0);
-    s_total_b += count;
-    return count;
+    /* Motor B (rear right) is mounted as a mirror image of Motor A (rear
+     * left), so its Hall A/B phase order is reversed relative to "forward"
+     * even though motor_set_speed() drives both with the same positive=
+     * forward PWM convention. Negate here so encoder_get_delta_b/_count_b
+     * honor the same "positive = forward" contract documented in
+     * encoder.h, matching Motor A and what motor_set_speed() expects. */
+    int32_t delta = -(int32_t)count;
+    s_total_b += delta;
+    return delta;
 }
 
 int32_t encoder_get_count_a(void)

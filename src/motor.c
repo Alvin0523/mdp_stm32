@@ -7,13 +7,16 @@
  *    - Rear Left Motor (A):  PB8 (TIM10_CH1) & PB9 (TIM11_CH1)
  *    - Rear Right Motor (B): PE5 (TIM9_CH1)  & PE6 (TIM9_CH2)
  *
- * 2. PWM Drive Principle:
+ * 2. PWM Drive Principle (locked-antiphase, matching WHEELTEC's vendor
+ *    reference firmware for this board):
  *    - AT8236 motor driver accepts 2 PWM inputs per channel (IN1 / IN2).
- *    - PWM Duty Cycle (0-100%) controls motor speed via pulse-width modulation.
- *    - Direction:
- *      * IN1 = PWM, IN2 = 0: Forward
- *      * IN1 = 0, IN2 = PWM: Reverse
- *      * IN1 = 0, IN2 = 0: Coast / Stop
+ *    - At rest, BOTH inputs sit at ~100% duty (electrical brake). To drive
+ *      a direction, one input stays pinned at 100% while the other is
+ *      pulled down from 100% by the commanded speed magnitude.
+ *    - A simpler "one side 0%, other side duty%" scheme was tried first and
+ *      left the wheels completely dead: AT8236 needs continuous switching
+ *      on both legs to keep its high-side gate drive alive, so a leg held
+ *      statically low never actually turns on.
  */
 
 #include "motor.h"
@@ -100,20 +103,28 @@ uint8_t motor_estop_engaged(void)
     return HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_3) == GPIO_PIN_RESET ? 1 : 0;
 }
 
+/* Locked-antiphase drive: both IN1/IN2 sit at ~100% duty (electrical brake)
+ * at rest, and one side is pulled down from 100% by the commanded magnitude
+ * to produce a direction. Ported from WHEELTEC's vendor reference firmware
+ * (BALANCE/balance.c Set_Pwm) for this exact board/AT8236 combination -
+ * the simpler "one side at 0%, other side at duty%" scheme this replaced
+ * left the wheels completely dead despite correct-looking PWM commands,
+ * because AT8236 needs continuous switching on both legs to keep its
+ * high-side gate drive alive; a leg statically held low never turns on. */
 static void motor_drive(TIM_HandleTypeDef *htim_in1, uint32_t ch_in1,
                          TIM_HandleTypeDef *htim_in2, uint32_t ch_in2, int16_t pct)
 {
     if (pct > 100) pct = 100;
     if (pct < -100) pct = -100;
 
-    uint32_t duty = ((uint32_t)(pct < 0 ? -pct : pct) * MOTOR_PWM_ARR) / 100U;
+    int32_t delta = ((int32_t)pct * (int32_t)MOTOR_PWM_ARR) / 100;
 
-    if (pct >= 0) {
-        __HAL_TIM_SET_COMPARE(htim_in1, ch_in1, duty);
-        __HAL_TIM_SET_COMPARE(htim_in2, ch_in2, 0);
+    if (delta < 0) {
+        __HAL_TIM_SET_COMPARE(htim_in1, ch_in1, MOTOR_PWM_ARR);
+        __HAL_TIM_SET_COMPARE(htim_in2, ch_in2, (uint32_t)((int32_t)MOTOR_PWM_ARR + delta));
     } else {
-        __HAL_TIM_SET_COMPARE(htim_in1, ch_in1, 0);
-        __HAL_TIM_SET_COMPARE(htim_in2, ch_in2, duty);
+        __HAL_TIM_SET_COMPARE(htim_in2, ch_in2, MOTOR_PWM_ARR);
+        __HAL_TIM_SET_COMPARE(htim_in1, ch_in1, (uint32_t)((int32_t)MOTOR_PWM_ARR - delta));
     }
 }
 

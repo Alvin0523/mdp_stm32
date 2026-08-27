@@ -15,6 +15,13 @@ imu_data_t g_imu_data = {0};
 
 static uint8_t s_imu_addr = 0xD0; /* 0x68 << 1 (Try 0xD0 first, fallback to 0xD2) */
 
+/* Gyro bias in raw LSB, sampled at rest during imu_init(). Uncorrected gyro
+ * noise/bias otherwise integrates directly into g_imu_data.yaw and drifts
+ * even when the robot is stationary. */
+static float s_gyro_bias_x = 0.0f;
+static float s_gyro_bias_y = 0.0f;
+static float s_gyro_bias_z = 0.0f;
+
 #define SCL_H() HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_SET)
 #define SCL_L() HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_RESET)
 #define SDA_H() HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET)
@@ -109,6 +116,37 @@ static void imu_read_bytes(uint8_t reg, uint8_t *buf, uint8_t len)
     i2c_stop();
 }
 
+/* Averages raw gyro readings for ~300ms at rest to find the zero-rate bias.
+ * Must run after PWR_MGMT_1/2 are configured (sensor actively sampling) and
+ * before the main loop starts driving - the robot is assumed stationary
+ * during boot. */
+static void imu_calibrate_gyro_bias(void)
+{
+    const int kSamples = 100;
+    int32_t sum_x = 0, sum_y = 0, sum_z = 0;
+
+    imu_write_reg(0x7F, 0x00); /* Select Bank 0 */
+
+    for (int i = 0; i < kSamples; i++) {
+        uint8_t buf[6];
+        imu_read_bytes(0x33, buf, 6); /* GYRO_XOUT_H (0x33) to GYRO_ZOUT_L (0x38) */
+
+        sum_x += (int16_t)((buf[0] << 8) | buf[1]);
+        sum_y += (int16_t)((buf[2] << 8) | buf[3]);
+        sum_z += (int16_t)((buf[4] << 8) | buf[5]);
+
+        HAL_Delay(3);
+    }
+
+    s_gyro_bias_x = (float)sum_x / kSamples;
+    s_gyro_bias_y = (float)sum_y / kSamples;
+    s_gyro_bias_z = (float)sum_z / kSamples;
+
+    printf(
+      "[IMU Calibration] Gyro bias (raw LSB): X=%.1f Y=%.1f Z=%.1f\r\n",
+      s_gyro_bias_x, s_gyro_bias_y, s_gyro_bias_z);
+}
+
 int imu_init(void)
 {
     __HAL_RCC_GPIOB_CLK_ENABLE();
@@ -150,6 +188,7 @@ int imu_init(void)
 
             g_imu_data.ready = 1;
             printf("[IMU Init] ICM-20948 Successfully Detected at 0x%02X!\r\n", s_imu_addr >> 1);
+            imu_calibrate_gyro_bias();
             return 0;
         }
     }
@@ -183,9 +222,9 @@ void imu_update(void)
     g_imu_data.accel_y = (float)ay_raw / 16384.0f * 9.81f;
     g_imu_data.accel_z = (float)az_raw / 16384.0f * 9.81f;
 
-    g_imu_data.gyro_x = (float)gx_raw / 131.0f;
-    g_imu_data.gyro_y = (float)gy_raw / 131.0f;
-    g_imu_data.gyro_z = (float)gz_raw / 131.0f;
+    g_imu_data.gyro_x = ((float)gx_raw - s_gyro_bias_x) / 131.0f;
+    g_imu_data.gyro_y = ((float)gy_raw - s_gyro_bias_y) / 131.0f;
+    g_imu_data.gyro_z = ((float)gz_raw - s_gyro_bias_z) / 131.0f;
 
     static uint32_t last_tick = 0;
     uint32_t now = HAL_GetTick();

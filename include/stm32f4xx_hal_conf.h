@@ -19,6 +19,7 @@
 /* 1. Module Selection: Enable only required peripherals for fast build      */
 /* -------------------------------------------------------------------------- */
 #define HAL_MODULE_ENABLED
+#define HAL_ADC_MODULE_ENABLED     /* Analog-to-Digital Converter driver     */
 #define HAL_CORTEX_MODULE_ENABLED  /* ARM Cortex-M4 core & SysTick functions */
 #define HAL_DMA_MODULE_ENABLED     /* Direct Memory Access driver            */
 #define HAL_FLASH_MODULE_ENABLED   /* Flash memory controller                */
@@ -53,6 +54,10 @@
 /* -------------------------------------------------------------------------- */
 /* 3. Include Core Peripheral Drivers                                        */
 /* -------------------------------------------------------------------------- */
+#ifdef HAL_ADC_MODULE_ENABLED
+  #include "stm32f4xx_hal_adc.h"
+#endif
+
 #ifdef HAL_RCC_MODULE_ENABLED
   #include "stm32f4xx_hal_rcc.h"
 #endif

@@ -19,7 +19,7 @@ typedef struct {
     float gyro_x;  /* Gyro Roll Rate (deg/s) */
     float gyro_y;  /* Gyro Pitch Rate (deg/s) */
     float gyro_z;  /* Gyro Yaw Rate (deg/s) */
-    float yaw;     /* Complementary Filter Yaw Angle (deg) */
+    float yaw;     /* Gyro-Z integrated yaw angle (deg) - bias-corrected, no accel/mag fusion */
     uint8_t ready; /* 1 if sensor detected and operational */
 } imu_data_t;
 

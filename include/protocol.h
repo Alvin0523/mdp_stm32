@@ -45,9 +45,10 @@ typedef struct {
     float    gyro_x;        /* deg/s */
     float    gyro_y;        /* deg/s */
     float    gyro_z;        /* deg/s */
-    float    yaw_deg;       /* Complementary-filter yaw (deg) */
+    float    yaw_deg;       /* Bias-corrected gyro-Z integration (deg), no accel/mag fusion */
     uint8_t  imu_ready;     /* 1 = IMU detected and operational */
     uint8_t  estop;         /* 1 = e-stop engaged (PD3) */
+    float    battery_v;     /* Battery pack voltage (V), PB0/ADC1_CH8 */
     uint32_t uptime_ms;
     uint8_t  checksum;      /* XOR of all bytes from 'type' through 'uptime_ms' */
 } telemetry_packet_t;

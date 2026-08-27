@@ -13,6 +13,7 @@
 #include "servo.h"
 #include "encoder.h"
 #include "selftest.h"
+#include "battery.h"
 
 void SystemClock_Config(void);
 
@@ -42,6 +43,7 @@ int main(void)
     oled_init();
     button_init();
     servo_init();
+    battery_init();
     int imu_status = imu_init();
 
     printf("\r\n=======================================================\r\n");
@@ -94,6 +96,8 @@ int main(void)
         /* Update IMU telemetry */
         imu_update();
 
+        const float battery_v = battery_read_voltage();
+
         /* Sample rear wheel encoders: delta since last read (this loop is
          * 10Hz, so delta*10 = ticks/sec) and running cumulative totals. */
         int32_t enc_delta_left = encoder_get_delta_a();
@@ -125,6 +129,7 @@ int main(void)
         telemetry.yaw_deg = g_imu_data.yaw;
         telemetry.imu_ready = g_imu_data.ready;
         telemetry.estop = motor_estop_engaged();
+        telemetry.battery_v = battery_v;
         telemetry.uptime_ms = HAL_GetTick();
         uart_send_telemetry(&telemetry);
 
@@ -132,13 +137,9 @@ int main(void)
         switch (g_oled_page) {
             case 0:
                 /* Page 1: Primary Drive & Battery Status
-                 * NOTE: battery_v is still a placeholder - no ADC driver
-                 * wired up yet (PB0/ADC1_IN8 per the resource sheet), and
-                 * the sense-resistor divider ratio isn't confirmed from the
-                 * schematic, so a computed voltage would just be a guess.
                  * left/right are real encoder tick-rates (ticks/sec), not
                  * calibrated m/s (no confirmed wheel diameter/gear ratio). */
-                oled_render_page1(12.4f, (float)(enc_delta_left * 10), (float)(enc_delta_right * 10), steer_deg, g_imu_data.yaw);
+                oled_render_page1(battery_v, (float)(enc_delta_left * 10), (float)(enc_delta_right * 10), steer_deg, g_imu_data.yaw);
                 break;
 
             case 1:

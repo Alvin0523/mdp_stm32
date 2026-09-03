@@ -12,17 +12,31 @@
  * firmware can drive. So each test phase is signalled by a distinct PE8
  * blink count instead of separate LEDs.
  *
- * servo_set_angle() now uses WHEELTEC's reference cubic PWM-vs-angle fit
- * (servo.c) - see servo.h for the clamp values (provisional, pending our
- * own fine-sweep + refit) and docs/stm32/tuning.md for the decision record.
+ * servo_set_angle() uses WHEELTEC's reference cubic PWM-vs-angle fit
+ * (servo.c). Sign convention CONFIRMED ON PHYSICAL HARDWARE (2026-09-03):
+ * positive = left, negative = right (matches REP-103). Operating clamps
+ * (servo.h) are this unit's own hardware-measured real limits: left
+ * 50-55deg chassis contact (2deg margin -> 48deg), right 26deg stall
+ * (2deg margin -> 24deg) - see docs/stm32/tuning.md for the full decision
+ * record, including how the LEFT/RIGHT labels got corrected after the
+ * sign convention was pinned down (the sweeps were run before that).
  *
- * CURRENTLY (drive phases 1/2 disabled - right-side-only servo measurement
- * pass, see selftest_run()/servo_sweep()):
+ * CURRENTLY (drive phases disabled - both sides already found, back to
+ * the normal both-extremes hold; see selftest_run()/servo_sweep()):
  *   1 blink = servo to LEFT max (SERVO_ANGLE_MAX_LEFT_RAD), hold, then
  *             RIGHT max (SERVO_ANGLE_MAX_RIGHT_RAD), hold
  *   2 blinks = done
  *
- * NORMAL sequence (restore by uncommenting phases 1/2 in selftest_run()):
+ * Fine-sweep calibration tooling (servo_sweep_left_fine()/
+ * servo_sweep_right_fine(), commented out in selftest_run()) stays
+ * available for re-checking either side: WATCH/LISTEN during each sweep -
+ * the last angle with clean, unobstructed motion is the real limit; a
+ * stall sounds like an audible buzz/whine with no visible motion, while
+ * on the left side specifically the actual limit is the wheel touching
+ * the chassis, not a servo stall - stop as soon as contact is visible.
+ *
+ * NORMAL drive-test sequence (restore by uncommenting drive phases in
+ * selftest_run()):
  *   1 blink = forward 1 wheel revolution
  *   2 blinks = backward 1 wheel revolution
  *   3 blinks = servo to LEFT max, hold, then RIGHT max, hold
@@ -58,8 +72,24 @@
  * (matching REP-103 / the rest of the stack, see servo.h). */
 #define SELFTEST_SERVO_SWEEP_STEP_DEG   1.0f
 #define SELFTEST_SERVO_SWEEP_STEP_RAD   (SELFTEST_SERVO_SWEEP_STEP_DEG * 3.14159265f / 180.0f)
-#define SELFTEST_SERVO_RIGHT_FINE_START_DEG 35.0f
-#define SELFTEST_SERVO_RIGHT_FINE_END_DEG   55.0f
+/* Ranges start just under the CURRENT operating clamp (servo.h) and sweep
+ * past it - the point is to find where the real mechanical lock/stall is,
+ * which is confirmed further out than the current provisional clamp on at
+ * least the right side. Still safe regardless of how far these go: the
+ * cubic mapping's own hard PWM clamp (servo.c, SERVO_WT_PWM_MIN/MAX_US)
+ * caps the actual pulse sent to WHEELTEC's own tested-safe bound no matter
+ * what angle is requested here. */
+/* LEFT = positive, RIGHT = negative - confirmed on physical hardware
+ * (servo.h). These ranges/values are unchanged from the original sweeps;
+ * only the LEFT/RIGHT labels were corrected after that confirmation (the
+ * sweeps were run before the sign convention was pinned down - see
+ * docs/stm32/tuning.md). */
+#define SELFTEST_SERVO_LEFT_FINE_START_DEG  40.0f
+#define SELFTEST_SERVO_LEFT_FINE_END_DEG    55.0f
+#define SELFTEST_SERVO_LEFT_FINE_START_RAD  (SELFTEST_SERVO_LEFT_FINE_START_DEG * 3.14159265f / 180.0f)
+#define SELFTEST_SERVO_LEFT_FINE_END_RAD    (SELFTEST_SERVO_LEFT_FINE_END_DEG * 3.14159265f / 180.0f)
+#define SELFTEST_SERVO_RIGHT_FINE_START_DEG (-22.0f)
+#define SELFTEST_SERVO_RIGHT_FINE_END_DEG   (-40.0f)
 #define SELFTEST_SERVO_RIGHT_FINE_START_RAD (SELFTEST_SERVO_RIGHT_FINE_START_DEG * 3.14159265f / 180.0f)
 #define SELFTEST_SERVO_RIGHT_FINE_END_RAD   (SELFTEST_SERVO_RIGHT_FINE_END_DEG * 3.14159265f / 180.0f)
 #define SELFTEST_SERVO_SWEEP_HOLD_MS    1500U
@@ -159,10 +189,11 @@ static void servo_sweep(void)
     /* Direct jumps (no intermediate stepping): center -> left max -> center
      * -> right max -> center, holding each long enough to measure with a
      * protractor. Bounds come from servo.h (SERVO_ANGLE_MAX_LEFT/RIGHT_RAD)
-     * - currently WHEELTEC's provisional clamp values, see servo.h/
-     * docs/stm32/tuning.md for status. */
+     * - this unit's own hardware-measured real limits, see servo.h/
+     * docs/stm32/tuning.md. Positive = left, negative = right - confirmed
+     * on physical hardware, see servo.h's sign-convention note. */
     oled_show_string_8x16_offset(1, 0, "LEFT MAX - HOLD");
-    servo_set_angle(-SERVO_ANGLE_MAX_LEFT_RAD);
+    servo_set_angle(SERVO_ANGLE_MAX_LEFT_RAD);
     HAL_Delay(SELFTEST_SERVO_HOLD_MEASURE_MS);
 
     oled_show_string_8x16_offset(1, 0, "CENTER");
@@ -170,22 +201,32 @@ static void servo_sweep(void)
     HAL_Delay(500);
 
     oled_show_string_8x16_offset(1, 0, "RIGHT MAX - HOLD");
-    servo_set_angle(SERVO_ANGLE_MAX_RIGHT_RAD);
+    servo_set_angle(-SERVO_ANGLE_MAX_RIGHT_RAD);
     HAL_Delay(SELFTEST_SERVO_HOLD_MEASURE_MS);
 
     servo_set_angle(0.0f);
     HAL_Delay(300);
 }
 
-/* Right-side fine sweep past the current (confirmed conservative)
- * SERVO_ANGLE_MAX_RIGHT_RAD clamp, to find this unit's real right-side
- * lock point - see docs/stm32/tuning.md. Not currently wired into
- * selftest_run() - kept for the next calibration pass. Uses
- * servo_set_angle_raw() to bypass the operating clamp. */
+/* Fine sweeps past the current operating clamp on each side, to find this
+ * unit's real mechanical lock point - see docs/stm32/tuning.md. Uses
+ * servo_set_angle_raw() to bypass the operating clamp (still bounded by
+ * the hard PWM safety clamp in servo.c). WATCH/LISTEN while running: the
+ * last angle with clean, unobstructed motion is the real limit - a stall
+ * sounds like an audible buzz/whine with no visible motion, or the
+ * knuckle visibly binding/scraping before the servo horn itself stops. */
 static void servo_sweep_right_fine(void)
 {
     servo_sweep_range(SELFTEST_SERVO_RIGHT_FINE_START_RAD, SELFTEST_SERVO_RIGHT_FINE_END_RAD,
-                       "RIGHT FINE 35-55", 1);
+                       "RIGHT FINE -22..-40", 1);
+    servo_set_angle(0.0f);
+    HAL_Delay(300);
+}
+
+static void servo_sweep_left_fine(void)
+{
+    servo_sweep_range(SELFTEST_SERVO_LEFT_FINE_START_RAD, SELFTEST_SERVO_LEFT_FINE_END_RAD,
+                       "LEFT FINE 40-55", 1);
     servo_set_angle(0.0f);
     HAL_Delay(300);
 }
@@ -227,7 +268,21 @@ void selftest_run(void)
      * drive_ticks(-SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
      */
 
-    /* Phase 1 (renumbered): servo sweep, both extremes */
+    /* Both sides now found (left: chassis contact 50-55deg; right: stall
+     * 26deg - see servo.h) and locked into SERVO_ANGLE_MAX_LEFT/RIGHT_RAD.
+     * Back to the normal both-extremes hold for routine verification -
+     * restore either fine sweep below if a side needs re-checking.
+     *
+     * blink_pe8(1, 150, 150);
+     * oled_show_string_8x16_offset(1, 0, "1: LEFT FINE SWEEP");
+     * servo_sweep_left_fine();
+     *
+     * blink_pe8(1, 150, 150);
+     * oled_show_string_8x16_offset(1, 0, "1: RIGHT FINE SWEEP");
+     * servo_sweep_right_fine();
+     */
+
+    /* Phase 1: servo sweep, both extremes */
     blink_pe8(1, 150, 150);
     oled_show_string_8x16_offset(1, 0, "1: SERVO SWEEP");
     servo_sweep();

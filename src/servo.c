@@ -87,8 +87,10 @@ static void servo_write_angle_unclamped(float angle_rad)
 
 void servo_set_angle(float angle_rad)
 {
-    if (angle_rad > SERVO_ANGLE_MAX_RIGHT_RAD) angle_rad = SERVO_ANGLE_MAX_RIGHT_RAD;
-    if (angle_rad < -SERVO_ANGLE_MAX_LEFT_RAD) angle_rad = -SERVO_ANGLE_MAX_LEFT_RAD;
+    /* Positive = left, negative = right - confirmed on physical hardware,
+     * see servo.h's sign-convention note. */
+    if (angle_rad > SERVO_ANGLE_MAX_LEFT_RAD) angle_rad = SERVO_ANGLE_MAX_LEFT_RAD;
+    if (angle_rad < -SERVO_ANGLE_MAX_RIGHT_RAD) angle_rad = -SERVO_ANGLE_MAX_RIGHT_RAD;
     servo_write_angle_unclamped(angle_rad);
 }
 

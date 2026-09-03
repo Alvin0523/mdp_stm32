@@ -24,16 +24,31 @@ extern "C" {
  * own kinematics manual - no such linkage holds a constant ratio across its
  * range), not something specific to their sample unit.
  *
- * These two clamp bounds ARE WHEELTEC's own numbers, though, and those ARE
- * per-unit/per-assembly - confirmed by hardware test on this chassis
- * (2026-09-03): sign convention matches (positive=right, negative=left),
- * -28.1deg lands close to this unit's real left lock, but +18.3deg is
- * confirmed conservative - this unit's real right lock is further out.
- * PROVISIONAL pending our own fine-sweep + refit (see
- * docs/stm32/tuning.md "Servo Range & Steering Calibration") - safe to
- * drive on today, not yet accurate/using the full range. */
-#define SERVO_ANGLE_MAX_RIGHT_RAD (18.3f * 3.14159265f / 180.0f) /* ~0.3195 rad - confirmed conservative, real limit is further out */
-#define SERVO_ANGLE_MAX_LEFT_RAD  (28.1f * 3.14159265f / 180.0f) /* ~0.4904 rad - close to this unit's real left lock */
+ * Sign convention CONFIRMED ON PHYSICAL HARDWARE (2026-09-03, observer
+ * standing behind the robot, facing the same way it drives): POSITIVE
+ * commanded angle = wheel turns LEFT, NEGATIVE = RIGHT. This matches
+ * REP-103 (positive yaw/turn = CCW = left) directly - this servo's
+ * physical wiring/linkage already agrees with the ROS convention, so no
+ * sign translation is needed anywhere in the stack (see
+ * mdp_bridge/serial_bridge_node.cpp's onJointCommand()/onTelemetry(),
+ * which pass steer_rad through unmodified for exactly this reason).
+ *
+ * Clamp bounds are this unit's own hardware-measured values (selftest.c's
+ * fine sweeps, servo_set_angle_raw() past the operating clamp,
+ * watching/listening for stall or knuckle binding). The sweeps that found
+ * these were run before the sign convention above was confirmed, so the
+ * magnitudes below are correct but were originally found under swapped
+ * LEFT/RIGHT labels - see docs/stm32/tuning.md for the full story:
+ * - LEFT (positive): real limit is chassis contact, not a servo stall (no
+ *   stall found up to 55deg) - 50deg confirmed clean, 55deg confirmed the
+ *   wheel touching the chassis. Exact contact-onset point between 50-55deg
+ *   not pinned down further (didn't want more contact just to find it
+ *   exactly) - clamped 2deg back from the last confirmed-clean point
+ *   (50deg).
+ * - RIGHT (negative): real stall confirmed at 26deg. Clamped 2deg back
+ *   from that, not exactly at it, to avoid repeatedly stalling the servo. */
+#define SERVO_ANGLE_MAX_LEFT_RAD  (48.0f * 3.14159265f / 180.0f) /* ~0.8378 rad - 2deg back from 50deg confirmed-clean; real contact point is somewhere in 50-55deg */
+#define SERVO_ANGLE_MAX_RIGHT_RAD (24.0f * 3.14159265f / 180.0f) /* ~0.4189 rad - real stall at 26deg, 2deg safety margin */
 
 void servo_init(void);
 
@@ -41,8 +56,9 @@ void servo_init(void);
  * @brief Steer the front wheels.
  * @param angle_rad Desired steering angle in RADIANS (REP-103 /
  *                   ackermann_steering_controller convention), positive =
- *                   right, negative = left. Clamped to
- *                   +SERVO_ANGLE_MAX_RIGHT_RAD / -SERVO_ANGLE_MAX_LEFT_RAD -
+ *                   left, negative = right - confirmed on physical
+ *                   hardware, see the sign-convention note above. Clamped
+ *                   to +SERVO_ANGLE_MAX_LEFT_RAD / -SERVO_ANGLE_MAX_RIGHT_RAD -
  *                   found on physical hardware, not placeholders.
  */
 void servo_set_angle(float angle_rad);
@@ -54,8 +70,7 @@ void servo_set_angle(float angle_rad);
  * normal driving path (main.c). The operating clamp in servo_set_angle()
  * exists to protect the linkage during real driving; this function exists
  * so calibration tooling (selftest.c's servo sweep) can probe past it for
- * measurement purposes (e.g. finding this unit's real right-side lock,
- * since SERVO_ANGLE_MAX_RIGHT_RAD is confirmed conservative - see above).
+ * measurement purposes.
  */
 void servo_set_angle_raw(float angle_rad);
 

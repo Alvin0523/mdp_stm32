@@ -38,8 +38,11 @@ void button_init(void)
     GPIO_InitStruct.Pull = GPIO_PULLUP;
     HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-    /* Enable EXTI Line 0 Interrupt in NVIC */
-    HAL_NVIC_SetPriority(EXTI0_IRQn, 2, 0);
+    /* Enable EXTI Line 0 Interrupt in NVIC. Lowest priority (highest
+     * number) of this project's app-level interrupts - a human button
+     * press has no hard real-time deadline, unlike the motor PID (priority
+     * 1) or command reception (priority 2) - see docs/stm32/control_loop.md. */
+    HAL_NVIC_SetPriority(EXTI0_IRQn, 3, 0);
     HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 }
 

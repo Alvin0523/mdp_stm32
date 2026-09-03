@@ -14,13 +14,21 @@
 
 #include "servo.h"
 
-/* Standard RC servo pulse range; adjust SERVO_ANGLE_MAX_DEG to match the
- * chassis's actual mechanical steering limit if the linkage can't reach
- * full lock at these pulse widths. */
-#define SERVO_PULSE_MIN_US    1000U
 #define SERVO_PULSE_CENTER_US 1500U
-#define SERVO_PULSE_MAX_US    2000U
-#define SERVO_ANGLE_MAX_DEG   30.0f
+
+/* WHEELTEC's reference cubic PWM-vs-angle fit, adopted here as the real
+ * conversion (not just a comparison tool) - see servo.h for the full
+ * rationale/provenance (R550_C30D(2.0) balance.c, Drive_Motor()'s Akm_Car
+ * branch) and why the clamp bounds (SERVO_ANGLE_MAX_LEFT/RIGHT_RAD, servo.h)
+ * are provisional pending our own fine-sweep data. */
+#define SERVO_WT_RATIO       636.56f
+#define SERVO_WT_FIT_CENTER  1.572f
+/* WHEELTEC's own tested-safe PWM bound - kept as the hard safety clamp since
+ * this cubic's behavior outside their tested envelope is unverified on our
+ * unit. The angle-level clamp in servo_set_angle() should keep the formula
+ * well inside this anyway; this is belt-and-suspenders. */
+#define SERVO_WT_PWM_MIN_US 800.0f
+#define SERVO_WT_PWM_MAX_US 2200.0f
 
 static TIM_HandleTypeDef s_htim12;
 
@@ -53,18 +61,41 @@ void servo_init(void)
     HAL_TIM_PWM_Start(&s_htim12, TIM_CHANNEL_2);
 }
 
-/**
- * @brief Steer the front wheels.
- * @param angle_deg Desired steering angle, positive = right, negative = left.
- *                   Clamped to +/- SERVO_ANGLE_MAX_DEG.
- */
-void servo_set_angle(float angle_deg)
+/* Shared conversion, used by both the clamped and raw entry points below.
+ * Cubic coefficients copied verbatim from WHEELTEC's R550_C30D(2.0) chassis
+ * firmware (BALANCE/balance.c):
+ *
+ *   Angle_Servo = -0.628*angle^3 + 1.269*angle^2 - 1.772*angle + 1.573;
+ *   Servo = SERVO_INIT + (Angle_Servo - 1.572) * 636.56;
+ *
+ * Their Servo/SERVO_INIT are already in microseconds (their PWM clamp,
+ * 800-2200us, is a plausible RC pulse range - same assumption made here by
+ * using our own SERVO_PULSE_CENTER_US as SERVO_INIT). */
+static void servo_write_angle_unclamped(float angle_rad)
 {
-    if (angle_deg > SERVO_ANGLE_MAX_DEG) angle_deg = SERVO_ANGLE_MAX_DEG;
-    if (angle_deg < -SERVO_ANGLE_MAX_DEG) angle_deg = -SERVO_ANGLE_MAX_DEG;
+    float angle_servo = -0.628f * angle_rad * angle_rad * angle_rad
+                       +  1.269f * angle_rad * angle_rad
+                       -  1.772f * angle_rad
+                       +  1.573f;
+    float pulse_us = (float)SERVO_PULSE_CENTER_US + (angle_servo - SERVO_WT_FIT_CENTER) * SERVO_WT_RATIO;
 
-    float span_us = (SERVO_PULSE_MAX_US - SERVO_PULSE_MIN_US) / 2.0f;
-    uint32_t pulse_us = (uint32_t)(SERVO_PULSE_CENTER_US + (angle_deg / SERVO_ANGLE_MAX_DEG) * span_us);
+    if (pulse_us > SERVO_WT_PWM_MAX_US) pulse_us = SERVO_WT_PWM_MAX_US;
+    if (pulse_us < SERVO_WT_PWM_MIN_US) pulse_us = SERVO_WT_PWM_MIN_US;
 
-    __HAL_TIM_SET_COMPARE(&s_htim12, TIM_CHANNEL_2, pulse_us);
+    __HAL_TIM_SET_COMPARE(&s_htim12, TIM_CHANNEL_2, (uint32_t)pulse_us);
+}
+
+void servo_set_angle(float angle_rad)
+{
+    if (angle_rad > SERVO_ANGLE_MAX_RIGHT_RAD) angle_rad = SERVO_ANGLE_MAX_RIGHT_RAD;
+    if (angle_rad < -SERVO_ANGLE_MAX_LEFT_RAD) angle_rad = -SERVO_ANGLE_MAX_LEFT_RAD;
+    servo_write_angle_unclamped(angle_rad);
+}
+
+void servo_set_angle_raw(float angle_rad)
+{
+    /* No SERVO_ANGLE_MAX_LEFT/RIGHT_RAD clamp - calibration/self-test use
+     * only, see the warning in servo.h. Still bounded by SERVO_WT_PWM_MIN/
+     * MAX_US above regardless. */
+    servo_write_angle_unclamped(angle_rad);
 }

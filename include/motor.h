@@ -46,6 +46,66 @@ void motor_set_speed_rad_s(float left_rad_s, float right_rad_s);
  */
 uint8_t motor_estop_engaged(void);
 
+/**
+ * @brief Initialize the closed-loop wheel-speed PID control loop.
+ * Must be called after motor_init() AND encoder_init(). Starts TIM7 as a
+ * 100Hz periodic interrupt that reads encoder deltas and drives PWM output
+ * toward the target set via motor_pid_set_target() - see
+ * docs/stm32/control_loop.md for the full design rationale.
+ *
+ * NOT YET BENCH-TUNED: MOTOR_PID_KP/KI in motor.c are a starting-point
+ * guess only, not verified on hardware. Do not trust this beyond
+ * controlled bench testing until it's been tuned on the real chassis.
+ */
+void motor_pid_init(void);
+
+/**
+ * @brief Enable/disable the closed-loop control loop.
+ * While disabled, the PID ISR forces both wheels to 0% PWM every cycle and
+ * resets its integrators (avoids windup while idle, and guarantees an
+ * immediate stop rather than a ramped one). Call this with 0 anywhere the
+ * old code called motor_set_speed(0, 0) directly for a safety fail-safe
+ * (stale command timeout, motor ON/OFF switch off) - the PID loop must
+ * never be allowed to override those.
+ */
+void motor_pid_enable(uint8_t enable);
+
+/**
+ * @brief Set the target wheel angular velocities for the PID loop.
+ * Only takes effect while the loop is enabled via motor_pid_enable(1).
+ * @param left_rad_s  Motor A (rear left) target angular velocity, rad/s.
+ * @param right_rad_s Motor B (rear right) target angular velocity, rad/s.
+ */
+void motor_pid_set_target(float left_rad_s, float right_rad_s);
+
+/**
+ * @brief Read back the PID loop's most recent encoder-measured wheel
+ * angular velocities (sampled at the same 100Hz rate the PID runs at).
+ * Use this instead of calling encoder_get_delta_a/b() directly once the
+ * PID loop is running - those are now consumed exclusively by the PID ISR
+ * (they reset the hardware tick counter on every call, so a second
+ * consumer would starve the PID loop of ticks and get incomplete reads
+ * itself).
+ */
+void motor_pid_get_measured_rad_s(float *left_rad_s, float *right_rad_s);
+
+/**
+ * @brief Pause the PID loop's TIM7 interrupt entirely (not just disable
+ * its output - stops it from touching the motors OR consuming encoder
+ * ticks at all). Call this before anything else needs direct, exclusive
+ * access to motor_set_speed()/encoder_get_delta_a/b() - currently only
+ * selftest.c, which drives motors and reads encoder deltas directly and
+ * would otherwise have both stolen out from under it every 10ms.
+ */
+void motor_pid_pause(void);
+
+/**
+ * @brief Resume the PID loop after motor_pid_pause(). Resets integrators,
+ * same as a fresh motor_pid_enable(1) - whatever accumulated before the
+ * pause is stale relative to whatever drove the motors while paused.
+ */
+void motor_pid_resume(void);
+
 #ifdef __cplusplus
 }
 #endif

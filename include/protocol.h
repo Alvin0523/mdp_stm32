@@ -2,7 +2,7 @@
  * @file protocol.h
  * @brief USART3 <-> Raspberry Pi Binary Telemetry/Command Protocol
  *
- * Custom lightweight framed protocol (not micro-ROS) linking this firmware
+ * Custom lightweight framed protocol linking this firmware
  * to a ROS2 bridge node on the Pi over USART3 @ 115200 baud. Both packet
  * types are fixed-size and start with the same 2 sync bytes + type byte, so
  * a receiver can resync after a dropped/corrupted byte.
@@ -31,7 +31,9 @@ extern "C" {
 
 #pragma pack(push, 1)
 
-/* STM32 -> Pi, sent once per main loop iteration (currently 10Hz). */
+/* STM32 -> Pi, sent from main.c's "fast" tier (100Hz, FAST_PERIOD_MS) via
+ * interrupt-driven TX (HAL_UART_Transmit_IT, usart.c) - matches the motor
+ * PID's own 100Hz encoder sampling 1:1. */
 typedef struct {
     uint8_t  sync0;
     uint8_t  sync1;

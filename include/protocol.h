@@ -33,7 +33,8 @@ extern "C" {
 
 /* STM32 -> Pi, sent from main.c's "fast" tier (100Hz, FAST_PERIOD_MS) via
  * interrupt-driven TX (HAL_UART_Transmit_IT, usart.c) - matches the motor
- * PID's own 100Hz encoder sampling 1:1. */
+ * PID's own 100Hz encoder sampling 1:1. Keep the Pi-side decoder in sync
+ * with this field order. */
 typedef struct {
     uint8_t  sync0;
     uint8_t  sync1;
@@ -51,6 +52,9 @@ typedef struct {
     uint8_t  imu_ready;     /* 1 = IMU detected and operational */
     uint8_t  estop;         /* 1 = e-stop engaged (PD3) */
     float    battery_v;     /* Battery pack voltage (V), PB0/ADC1_CH8 */
+    uint16_t ir_raw;        /* IR ADC reading (0-4095), PC2/ADC1_CH12 */
+    float    ir_voltage;    /* IR sensor output voltage (V) */
+    float    ir_distance_cm; /* Estimated IR distance (cm) */
     uint32_t uptime_ms;
     uint8_t  checksum;      /* XOR of all bytes from 'type' through 'uptime_ms' */
 } telemetry_packet_t;

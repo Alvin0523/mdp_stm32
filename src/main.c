@@ -14,6 +14,7 @@
 #include "encoder.h"
 #include "selftest.h"
 #include "battery.h"
+#include "ir_sensor.h"
 
 void SystemClock_Config(void);
 
@@ -46,6 +47,7 @@ int main(void)
     button_init();
     servo_init();
     battery_init();
+    ir_sensor_init();
     motor_pid_init(); /* must come after motor_init()/encoder_init() above */
     int imu_status = imu_init();
 
@@ -76,6 +78,9 @@ int main(void)
      * without re-reading a fast-tier-owned resource out of turn. */
     float meas_left_rad_s = 0.0f, meas_right_rad_s = 0.0f;
     float battery_v = 0.0f;
+    uint16_t ir_raw = 0U;
+    float ir_voltage = 0.0f;
+    float ir_distance_cm = -1.0f;
 
     /* PROTOCOL_COMMAND_TIMEOUT_MS: if no valid command packet arrives from
      * the host within this window, stop driving (fail safe) rather than
@@ -171,6 +176,9 @@ int main(void)
             telemetry.imu_ready = g_imu_data.ready;
             telemetry.estop = motor_estop_engaged();
             telemetry.battery_v = battery_v; /* last slow-tier reading, see below */
+            telemetry.ir_raw = ir_raw;
+            telemetry.ir_voltage = ir_voltage;
+            telemetry.ir_distance_cm = ir_distance_cm;
             telemetry.uptime_ms = HAL_GetTick();
             uart_send_telemetry(&telemetry);
         }
@@ -181,6 +189,10 @@ int main(void)
             HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_8); /* heartbeat LED */
 
             battery_v = battery_read_voltage();
+
+            ir_raw = ir_sensor_read_raw();
+            ir_voltage = (float)ir_raw * (3.3f / 4095.0f);
+            ir_distance_cm = ir_sensor_raw_to_distance_cm(ir_raw);
 
             /* Render Current OLED Display Page based on g_oled_page */
             switch (g_oled_page) {
@@ -198,10 +210,8 @@ int main(void)
                     break;
 
                 case 1:
-                    /* Page 2: Distance Sensors (Ultrasonic & IR)
-                     * NOTE: still fully fake - no ultrasonic/IR driver
-                     * exists in this project yet. */
-                    oled_render_page2(18.5f, 22.0f, 24.5f);
+                    /* Page 2: Distance Sensors (Ultrasonic & IR). */
+                    oled_render_page2(18.5f, ir_raw, ir_voltage, ir_distance_cm);
                     break;
 
                 case 2:

@@ -209,19 +209,19 @@ void oled_render_page1(float battery_v, float left_speed, float right_speed, flo
     oled_show_string_8x16_offset(3, 12, buf);
 }
 
-void oled_render_page2(float us_cm, float ir_left_cm, float ir_right_cm)
+void oled_render_page2(float us_cm, uint16_t ir_raw, float ir_voltage, float ir_distance_cm)
 {
     char buf[16];
 
     oled_show_string_8x16_offset(0, 12, "== DISTANCE =");
 
-    snprintf(buf, sizeof(buf), "Ultra : %4.1f", us_cm);
+    snprintf(buf, sizeof(buf), "Ultra:%4.1f cm", us_cm);
     oled_show_string_8x16_offset(1, 12, buf);
 
-    snprintf(buf, sizeof(buf), "IR Left: %4.1f", ir_left_cm);
+    snprintf(buf, sizeof(buf), "IR raw:%4u", ir_raw);
     oled_show_string_8x16_offset(2, 12, buf);
 
-    snprintf(buf, sizeof(buf), "IR Rght: %4.1f", ir_right_cm);
+    snprintf(buf, sizeof(buf), "IR:%1.2fV %4.1fcm", ir_voltage, ir_distance_cm);
     oled_show_string_8x16_offset(3, 12, buf);
 }
 

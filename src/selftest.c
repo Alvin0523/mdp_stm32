@@ -21,19 +21,30 @@
  * record, including how the LEFT/RIGHT labels got corrected after the
  * sign convention was pinned down (the sweeps were run before that).
  *
- * CURRENTLY (drive phases disabled - both sides already found, back to
- * the normal both-extremes hold; see selftest_run()/servo_sweep()):
- *   1 blink = servo to LEFT max (SERVO_ANGLE_MAX_LEFT_RAD), hold, then
- *             RIGHT max (SERVO_ANGLE_MAX_RIGHT_RAD), hold
- *   2 blinks = done
+ * CURRENTLY IN RAW-PULSE STEERING CALIBRATION MODE (drive phases and the
+ * both-extremes hold disabled; see selftest_run() and the RAW-PULSE
+ * CALIBRATION block below):
+ *   1 blink  = PHASE 1, straight line via the PID loop, steering centered at
+ *              the measured 1490us
+ *   2 blinks = CENTER TRIM (disabled - already done, 1490us)
+ *   3 blinks = PHASE B, protractor measurement sweep (disabled by default)
  *
- * Fine-sweep calibration tooling (servo_sweep_left_fine()/
- * servo_sweep_right_fine(), commented out in selftest_run()) stays
- * available for re-checking either side: WATCH/LISTEN during each sweep -
- * the last angle with clean, unobstructed motion is the real limit; a
- * stall sounds like an audible buzz/whine with no visible motion, while
- * on the left side specifically the actual limit is the wheel touching
- * the chassis, not a servo stall - stop as soon as contact is visible.
+ * Every phase advances ONE STEP PER PE0 PRESS and displays the raw pulse
+ * width, so measurement is self-paced. Any phase can be skipped by simply
+ * not pressing PE0 - it times out and recenters. Watch and listen at every
+ * step: the last pulse with clean, unobstructed motion is the real limit.
+ * A servo stall is an audible buzz/whine with no visible motion; chassis
+ * or linkage contact is the wheel/knuckle visibly binding or scraping
+ * while the servo still strains. Stop at the last clean step - not the one
+ * that stalled. Releasing the button for SELFTEST_CAL_STEP_TIMEOUT_MS
+ * aborts and recenters, so nothing is left stalled unattended.
+ *
+ * Calibrate in MICROSECONDS, not in the "angle" the servo_set_angle*()
+ * functions take - that unit is an input to WHEELTEC's unverified cubic
+ * and its 800-2200us clamp is what previously made the right side
+ * impossible to measure. Full reasoning at servo.h's servo_set_pulse_us().
+ * The older angle-based sweeps (servo_sweep_range()/servo_sweep_left_fine()/
+ * servo_sweep_right_fine()) are retained for reference only.
  *
  * NORMAL drive-test sequence (restore by uncommenting drive phases in
  * selftest_run()):
@@ -51,6 +62,7 @@
 #include "stm32f4xx_hal.h"
 #include "motor.h"
 #include "servo.h"
+#include "button.h"
 #include "encoder.h"
 #include "oled.h"
 #include <stdlib.h>
@@ -93,6 +105,14 @@
 #define SELFTEST_SERVO_RIGHT_FINE_START_RAD (SELFTEST_SERVO_RIGHT_FINE_START_DEG * 3.14159265f / 180.0f)
 #define SELFTEST_SERVO_RIGHT_FINE_END_RAD   (SELFTEST_SERVO_RIGHT_FINE_END_DEG * 3.14159265f / 180.0f)
 #define SELFTEST_SERVO_SWEEP_HOLD_MS    1500U
+
+/* Straight-line PID test: target wheel speed and run duration. 5 rad/s is
+ * roughly 15% of MOTOR_MAX_WHEEL_RAD_S (34.56) - slow enough to stay
+ * controllable indoors, fast enough that the PID is actually working. 4s is
+ * long enough to see a curve develop; the 1-wheel-revolution drive phases
+ * are far too short for that. */
+#define SELFTEST_STRAIGHT_RAD_S 5.0f
+#define SELFTEST_STRAIGHT_MS    4000U
 
 static void blink_pe8(uint8_t times, uint32_t on_ms, uint32_t off_ms)
 {
@@ -208,6 +228,363 @@ static void servo_sweep(void)
     HAL_Delay(300);
 }
 
+/* ------------------------------------------------------------------------
+ * RAW-PULSE CALIBRATION (microseconds, button-advanced)
+ *
+ * Preferred tool for finding the real mechanical steering limits and for
+ * protractor work, in place of the angle-based sweeps below. Rationale in
+ * full at servo.h's servo_set_pulse_us() docs; the short version:
+ *
+ *   - Microseconds is the only unit here that is physically meaningful on
+ *     its own. The angle sweeps' unit is an input to WHEELTEC's borrowed
+ *     cubic, which is the very mapping being validated - measuring against
+ *     it would be circular.
+ *   - The angle path clamps at 800-2200us, and the cubic reaches 2200us at
+ *     only ~-25.6deg commanded. Angle sweeps past that point send an
+ *     identical pulse and cannot move the servo, so the previously recorded
+ *     "right stall at 26deg" tells us nothing about the linkage. This path
+ *     uses the wider SERVO_CAL_PULSE_MIN/MAX_US (600-2400us) instead.
+ *   - The cubic's slope varies ~3x across the range, so equal angle steps
+ *     are unequal physical steps. Equal microsecond steps are uniform.
+ *
+ * Advance is one step per PE0 press, so measuring is self-paced rather than
+ * racing a fixed delay. If no press arrives within
+ * SELFTEST_CAL_STEP_TIMEOUT_MS the sweep aborts and recenters - deliberate,
+ * so a servo that has hit a stall is never left sitting loaded and drawing
+ * current while unattended.
+ * --------------------------------------------------------------------- */
+
+/* Per-step wait before a limit/measure sweep gives up and recenters. Those
+ * sweeps may be sitting against a stalled servo, so giving up promptly is the
+ * safe default. The center trim does not use this - it holds position
+ * indefinitely instead, see servo_cal_center_trim(). */
+#define SELFTEST_CAL_STEP_TIMEOUT_MS 30000U
+
+/* --- Center trim: find the pulse width that actually rolls straight ---
+ *
+ * 1500us is the nominal mechanical center but has never been verified. With
+ * the motors off and the car pushed by hand it curves RIGHT, which isolates
+ * the fault to steering geometry - no motor or PID contribution is possible
+ * in that test. Curving right means true straight-ahead sits at a SHORTER
+ * pulse than 1500 (shorter = left on this unit, per the measured endpoints:
+ * 840us at +35deg left, 2400us at -29.5deg right), so this sweeps downward.
+ *
+ * 5us steps are ~0.27deg of real wheel angle each (left-side resolution is
+ * 0.053deg/us), fine enough to land on straight without being tedious. If the
+ * whole range is exhausted while it still curves right, lower
+ * SELFTEST_TRIM_END_US further.
+ *
+ * Each step is HELD indefinitely - no timeout, no auto-recenter - so the car
+ * can be pushed repeatedly at one setting and power cut at the good one. */
+#define SELFTEST_TRIM_START_US 1500U
+#define SELFTEST_TRIM_END_US   1430U
+#define SELFTEST_TRIM_STEP_US     5U
+
+/* --- Phase A: mechanical limit finding, one side at a time ---
+ *
+ * Each side starts at a pulse already known to be safe and steps OUTWARD in
+ * small increments, so the first thing that ever goes wrong is the limit
+ * being looked for. Note both sides move AWAY from 1500us but in opposite
+ * numerical directions: the cubic's slope is negative, so left is a
+ * shortening pulse and right a lengthening one.
+ *
+ * LEFT: 887us was the old operating clamp and 866us was observed moving
+ * cleanly, with wheel-to-chassis contact appearing by ~809us. Starting at
+ * 950us leaves a margin inside all of that. The expected outcome here is
+ * chassis contact, not a stall.
+ *
+ * RIGHT: genuinely unknown territory. 2144us was the old clamp, and
+ * everything beyond ~2200us was previously unreachable because the angle
+ * path clamped there - so the old "stall" was the firmware, not the
+ * hardware. Sweeping to 2400us (SERVO_CAL_PULSE_MAX_US) covers the rest of
+ * the conventional RC envelope. A real stall may well appear partway; stop
+ * there and record it. */
+#define SELFTEST_CAL_LEFT_START_US   950U
+#define SELFTEST_CAL_LEFT_END_US     780U
+#define SELFTEST_CAL_LEFT_STEP_US     10U
+
+/* Right range narrowed to the unexplored top end: 2400us was already reached
+ * with the wheel still tracking (29.5deg real), so the interesting region is
+ * above it. Starts at 2380us to give one known-good step for reference
+ * before entering new territory, and ends at SERVO_CAL_PULSE_MAX_US.
+ *
+ * WHAT TO LOOK FOR HERE - the question is specifically whether the wheel
+ * still MOVES as the pulse grows:
+ *   - angle keeps increasing  -> still not at any limit
+ *   - angle stops changing, servo silent -> servo's internal travel limit,
+ *     a real and acceptable answer for this side
+ *   - audible buzz/whine, no motion -> stall against a hard stop; back off
+ *     immediately, do not hold it there
+ *   - visible binding/scraping -> linkage or chassis contact
+ * Compare the angle at 2380 against 2500. If they are the same, the pulse
+ * has stopped buying travel and this side's real maximum is whatever that
+ * angle is. */
+#define SELFTEST_CAL_RIGHT_START_US 2380U
+#define SELFTEST_CAL_RIGHT_END_US   2500U
+#define SELFTEST_CAL_RIGHT_STEP_US    10U
+
+/* --- Phase B: protractor measurement across the full range ---
+ *
+ * Run only AFTER phase A, and edit these bounds to sit just inside the
+ * limits it found - the defaults are placeholders based on the old clamps,
+ * not measured values. Coarse steps on purpose: the goal is a dozen or so
+ * (pulse, real angle) pairs to fit a mapping to, and manual protractor
+ * precision is far coarser than the 1us the timer can resolve, so finer
+ * steps would only add reading noise. The range is swept in one continuous
+ * pass through center rather than per-side, which keeps every reading on
+ * the same protractor setup. */
+#define SELFTEST_CAL_MEASURE_START_US  900U
+#define SELFTEST_CAL_MEASURE_END_US   2200U
+#define SELFTEST_CAL_MEASURE_STEP_US   100U
+
+/* Blocks until PE0 is pressed, or until timeout_ms elapses since entry.
+ * Returns 1 on press, 0 on timeout.
+ *
+ * Waits for release before arming, so holding the button down advances one
+ * step rather than running away through the whole sweep. Also drains
+ * button.c's EXTI0 self-test request flag: every press here would otherwise
+ * still be latched when this returns, and main.c's loop would immediately
+ * re-run the entire self-test on seeing it. */
+static uint8_t wait_for_button_press(uint32_t timeout_ms)
+{
+    const uint32_t start_tick = HAL_GetTick();
+
+    while (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_0) == GPIO_PIN_RESET) {
+        if (HAL_GetTick() - start_tick > timeout_ms) {
+            (void)button_consume_selftest_request();
+            return 0;
+        }
+        HAL_Delay(10);
+    }
+
+    while (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_0) != GPIO_PIN_RESET) {
+        if (HAL_GetTick() - start_tick > timeout_ms) {
+            (void)button_consume_selftest_request();
+            return 0;
+        }
+        HAL_Delay(10);
+    }
+
+    HAL_Delay(40); /* contact debounce */
+    (void)button_consume_selftest_request();
+    return 1;
+}
+
+/* Steps the pulse width from start_us to end_us in step_mag_us increments,
+ * one step per PE0 press. Direction is auto-detected from start vs. end.
+ * Returns 1 if the full range was covered, 0 if aborted on timeout.
+ *
+ * The OLED shows the absolute pulse width and its signed offset from the
+ * 1500us center - the offset is what makes left/right symmetry directly
+ * comparable, which the commanded-angle numbers obscure (48deg vs 24deg
+ * look wildly asymmetric while being only 613us vs 644us off center).
+ *
+ * WATCH AND LISTEN at every step. Two different limits present differently:
+ *   - servo stall: audible buzz/whine, no visible movement
+ *   - linkage/chassis contact: knuckle or wheel visibly binding or
+ *     scraping while the servo is still trying
+ * Stop at the LAST step that moved cleanly - that step is the limit, not
+ * the one that stalled. */
+static uint8_t servo_pulse_sweep(uint16_t start_us, uint16_t end_us,
+                                 uint16_t step_mag_us, const char *label,
+                                 uint32_t step_timeout_ms)
+{
+    char buf[20];
+    const int32_t center_us = (int32_t)servo_pulse_center_us();
+    const int32_t step = (end_us >= start_us) ? (int32_t)step_mag_us
+                                             : -(int32_t)step_mag_us;
+
+    oled_clear();
+    oled_show_string_8x16_offset(0, 0, label);
+    oled_show_string_8x16_offset(3, 0, "PE0=next step");
+
+    for (int32_t pulse = (int32_t)start_us;
+         (step > 0) ? (pulse <= (int32_t)end_us) : (pulse >= (int32_t)end_us);
+         pulse += step) {
+        servo_set_pulse_us((uint16_t)pulse);
+
+        /* Read back rather than echoing the request, so a value silenced by
+         * SERVO_CAL_PULSE_MIN/MAX_US is visible instead of misleading. */
+        const int32_t actual = (int32_t)servo_get_pulse_us();
+
+        snprintf(buf, sizeof(buf), "PULSE %4ld us", (long)actual);
+        oled_show_string_8x16_offset(1, 0, buf);
+        snprintf(buf, sizeof(buf), "CTR   %+4ld us", (long)(actual - center_us));
+        oled_show_string_8x16_offset(2, 0, buf);
+
+        if (!wait_for_button_press(step_timeout_ms)) {
+            servo_set_pulse_us((uint16_t)center_us);
+            oled_show_string_8x16_offset(1, 0, "TIMEOUT-CENTER  ");
+            oled_show_string_8x16_offset(2, 0, "                ");
+            HAL_Delay(1000);
+            return 0;
+        }
+    }
+
+    servo_set_pulse_us((uint16_t)center_us);
+    oled_show_string_8x16_offset(1, 0, "RANGE DONE      ");
+    oled_show_string_8x16_offset(2, 0, "                ");
+    HAL_Delay(800);
+    return 1;
+}
+
+static void servo_cal_left_limit(void)
+{
+    (void)servo_pulse_sweep(SELFTEST_CAL_LEFT_START_US, SELFTEST_CAL_LEFT_END_US,
+                            SELFTEST_CAL_LEFT_STEP_US, "LEFT LIMIT",
+                            SELFTEST_CAL_STEP_TIMEOUT_MS);
+}
+
+static void servo_cal_right_limit(void)
+{
+    (void)servo_pulse_sweep(SELFTEST_CAL_RIGHT_START_US, SELFTEST_CAL_RIGHT_END_US,
+                            SELFTEST_CAL_RIGHT_STEP_US, "RIGHT LIMIT",
+                            SELFTEST_CAL_STEP_TIMEOUT_MS);
+}
+
+static void servo_cal_measure(void)
+{
+    (void)servo_pulse_sweep(SELFTEST_CAL_MEASURE_START_US, SELFTEST_CAL_MEASURE_END_US,
+                            SELFTEST_CAL_MEASURE_STEP_US, "MEASURE",
+                            SELFTEST_CAL_STEP_TIMEOUT_MS);
+}
+
+/* Center trim. Steps the pulse DOWN by SELFTEST_TRIM_STEP_US on each PE0
+ * press, starting at 1500us, and HOLDS whatever it is on indefinitely.
+ *
+ * Deliberately does NOT reuse servo_pulse_sweep(): that recenters both on
+ * per-step timeout and at the end of its range, which would throw away the
+ * very position being hunted for. Here there is no timeout at all - the servo
+ * simply stays put until the next press, so the car can be pushed by hand as
+ * many times as needed at each step, and power can be cut at the step that
+ * rolls straight to leave the wheels sitting there.
+ *
+ * Motors stay off for this: a hand push removes the motors and PID from the
+ * picture entirely, so anything left over is steering geometry.
+ *
+ * Read the held pulse off the OLED. It becomes SERVO_PULSE_CENTER_US in
+ * servo.c, and both per-side slope constants recompute from it automatically
+ * since they are derived from the center-to-lock spans.
+ *
+ * NOTE: this never returns on its own. Once the range bottoms out it holds
+ * the last value forever, waiting on a button that no longer does anything -
+ * reset the board to get out. That is the intended way to use it (cut power
+ * at the step you want), but it does mean the robot is parked in calibration
+ * mode until reset. */
+static void servo_cal_center_trim(void)
+{
+    char buf[20];
+    int32_t pulse = (int32_t)SELFTEST_TRIM_START_US;
+
+    oled_clear();
+    oled_show_string_8x16_offset(0, 0, "CENTER TRIM");
+    oled_show_string_8x16_offset(3, 0, "PE0=-5us PUSH");
+
+    for (;;) {
+        servo_set_pulse_us((uint16_t)pulse);
+
+        snprintf(buf, sizeof(buf), "PULSE %4u us", (unsigned)servo_get_pulse_us());
+        oled_show_string_8x16_offset(1, 0, buf);
+        snprintf(buf, sizeof(buf), "CTR   %+4ld us",
+                 (long)((int32_t)servo_get_pulse_us() - (int32_t)servo_pulse_center_us()));
+        oled_show_string_8x16_offset(2, 0, buf);
+
+        /* No timeout - hold this position until the button is pressed. */
+        (void)wait_for_button_press(0xFFFFFFFFU);
+
+        if (pulse - (int32_t)SELFTEST_TRIM_STEP_US >= (int32_t)SELFTEST_TRIM_END_US) {
+            pulse -= (int32_t)SELFTEST_TRIM_STEP_US;
+        } else {
+            /* Bottom of the range and still curving right - hold here rather
+             * than wrapping or recentering, and widen SELFTEST_TRIM_END_US. */
+            oled_show_string_8x16_offset(3, 0, "END-LOWER RANGE");
+        }
+    }
+}
+
+/* --- Recorded (pulse, real angle) data points, for re-measurement ---
+ *
+ * Every angle here is a REAL protractor reading at the wheel, NOT the
+ * "commanded" value the servo_set_angle*() functions take. That distinction
+ * is the entire point: at 840us the cubic's commanded angle is 52.3deg while
+ * the wheel actually sits at 35.0deg, so the commanded unit overstates
+ * reality by roughly 1.5x and must never be recorded as if it were an angle.
+ *
+ * OPEN QUESTION on both entries below: WHICH WHEEL the protractor was on was
+ * not recorded, and that single omission is what stops these two numbers
+ * from being usable. It is not a bookkeeping nicety - it plausibly accounts
+ * for the entire 35.0 vs. 29.5deg gap:
+ *
+ * One servo drives both front wheels through a shared tie-rod, so a given
+ * physical wheel is the INNER wheel in one turn direction and the OUTER
+ * wheel in the other. Ackermann geometry deliberately steers the inner wheel
+ * harder than the outer. Measuring the same wheel at both locks therefore
+ * yields an inner-wheel angle for one direction and an outer-wheel angle for
+ * the other, and a several-degree difference between those is the mechanism
+ * working correctly - not a left/right asymmetry.
+ *
+ * So 35.0 vs. 29.5deg may be inner-vs-outer rather than left-vs-right. Until
+ * both wheels are measured at both locks, that cannot be told apart, and
+ * mdp_description's URDF (which wants left_joint and right_joint separately)
+ * cannot be updated either way. Four readings settle it:
+ *   left lock  -> left wheel (inner),  right wheel (outer)
+ *   right lock -> right wheel (inner), left wheel (outer) */
+typedef struct {
+    uint16_t    pulse_us;
+    float       measured_deg; /* real wheel angle previously read here */
+    const char *label;
+} servo_cal_point_t;
+
+static const servo_cal_point_t s_servo_cal_points[] = {
+    {  840U, 35.0f, "LEFT  840" },  /* left mechanical limit (chassis contact) */
+    { 2400U, 29.5f, "RIGHT 2400" }, /* NOT a confirmed limit - this was the old
+                                     * SERVO_CAL_PULSE_MAX_US ceiling, and the
+                                     * wheel was still tracking when it was
+                                     * reached. See PHASE 2. */
+};
+
+/* Drives to each recorded point in turn, button-advanced, showing the pulse
+ * alongside the angle previously measured there so the protractor reading
+ * can be compared on the spot. Disagreement is itself the result worth
+ * having - it would mean the earlier reading, the wheel identification, or
+ * center calibration is off.
+ *
+ * Uses servo_set_pulse_us(), so the SERVO_ANGLE_MAX_LEFT/RIGHT_RAD operating
+ * clamp does not apply - 840us is well outside it. Bounded only by
+ * SERVO_CAL_PULSE_MIN/MAX_US. */
+static void servo_cal_verify_points(void)
+{
+    char buf[20];
+    const uint16_t center_us = servo_pulse_center_us();
+    const uint8_t n = (uint8_t)(sizeof(s_servo_cal_points) / sizeof(s_servo_cal_points[0]));
+
+    oled_clear();
+    oled_show_string_8x16_offset(0, 0, "VERIFY POINTS");
+    oled_show_string_8x16_offset(3, 0, "PE0=next point");
+
+    for (uint8_t i = 0; i < n; i++) {
+        servo_set_pulse_us(s_servo_cal_points[i].pulse_us);
+
+        snprintf(buf, sizeof(buf), "%-11s", s_servo_cal_points[i].label);
+        oled_show_string_8x16_offset(1, 0, buf);
+        snprintf(buf, sizeof(buf), "WAS %+5.1f deg", (double)s_servo_cal_points[i].measured_deg);
+        oled_show_string_8x16_offset(2, 0, buf);
+
+        if (!wait_for_button_press(SELFTEST_CAL_STEP_TIMEOUT_MS)) {
+            servo_set_pulse_us(center_us);
+            oled_show_string_8x16_offset(1, 0, "TIMEOUT-CENTER  ");
+            oled_show_string_8x16_offset(2, 0, "                ");
+            HAL_Delay(1000);
+            return;
+        }
+    }
+
+    servo_set_pulse_us(center_us);
+    oled_show_string_8x16_offset(1, 0, "POINTS DONE     ");
+    oled_show_string_8x16_offset(2, 0, "                ");
+    HAL_Delay(800);
+}
+
 /* Fine sweeps past the current operating clamp on each side, to find this
  * unit's real mechanical lock point - see docs/stm32/tuning.md. Uses
  * servo_set_angle_raw() to bypass the operating clamp (still bounded by
@@ -229,6 +606,59 @@ static void servo_sweep_left_fine(void)
                        "LEFT FINE 40-55", 1);
     servo_set_angle(0.0f);
     HAL_Delay(300);
+}
+
+/* Drives straight with steering centered, THROUGH THE PID LOOP - unlike
+ * drive_ticks() above, which writes open-loop PWM with the loop paused and so
+ * cannot test it.
+ *
+ * Displays both wheels' encoder-measured rad/s live against the target, which
+ * is the diagnostic that matters here: if the two measured values sit near
+ * the target and near each other but the car still curves, the PID is doing
+ * its job and the fault is elsewhere (steering center, or unequal effective
+ * wheel radius, which an encoder cannot see). If the measured values differ
+ * from the target or from each other, the loop itself is not tracking and the
+ * untuned MOTOR_PID_KP/KI are the place to look.
+ *
+ * Encoder deltas are NOT read here - the PID ISR is their sole consumer while
+ * running, so this uses motor_pid_get_measured_rad_s() and times out on the
+ * clock rather than counting ticks. */
+static void servo_straight_line_pid(void)
+{
+    char buf[20];
+    float left_rad_s = 0.0f, right_rad_s = 0.0f;
+
+    oled_clear();
+    oled_show_string_8x16_offset(0, 0, "STRAIGHT PID");
+
+    servo_set_angle(0.0f); /* real angle now - 0 maps to the measured center */
+    HAL_Delay(400);
+
+    motor_pid_resume(); /* selftest_run() paused it on entry */
+    motor_pid_enable(1);
+    motor_pid_set_target(SELFTEST_STRAIGHT_RAD_S, SELFTEST_STRAIGHT_RAD_S);
+
+    const uint32_t start_tick = HAL_GetTick();
+    while (HAL_GetTick() - start_tick < SELFTEST_STRAIGHT_MS) {
+        motor_pid_get_measured_rad_s(&left_rad_s, &right_rad_s);
+
+        snprintf(buf, sizeof(buf), "TGT %4.1f rad/s", (double)SELFTEST_STRAIGHT_RAD_S);
+        oled_show_string_8x16_offset(1, 0, buf);
+        snprintf(buf, sizeof(buf), "L%4.1f  R%4.1f", (double)left_rad_s, (double)right_rad_s);
+        oled_show_string_8x16_offset(2, 0, buf);
+
+        HAL_Delay(100);
+    }
+
+    motor_pid_set_target(0.0f, 0.0f);
+    HAL_Delay(300);
+    motor_pid_enable(0);
+    motor_pid_pause();
+    motor_set_speed(0, 0);
+
+    oled_show_string_8x16_offset(1, 0, "STRAIGHT DONE   ");
+    oled_show_string_8x16_offset(2, 0, "                ");
+    HAL_Delay(500);
 }
 
 void selftest_run_if_requested(void)
@@ -268,24 +698,68 @@ void selftest_run(void)
      * drive_ticks(-SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
      */
 
-    /* Both sides now found (left: chassis contact 50-55deg; right: stall
-     * 26deg - see servo.h) and locked into SERVO_ANGLE_MAX_LEFT/RIGHT_RAD.
-     * Back to the normal both-extremes hold for routine verification -
-     * restore either fine sweep below if a side needs re-checking.
+    /* The angle-based fine sweeps are superseded by the raw-pulse
+     * calibration phases below and kept only for reference. Do not use them
+     * to find limits: their unit is an input to the unverified cubic, and
+     * their 800-2200us clamp is what made the right side unmeasurable in
+     * the first place (see the RAW-PULSE CALIBRATION block above).
      *
-     * blink_pe8(1, 150, 150);
-     * oled_show_string_8x16_offset(1, 0, "1: LEFT FINE SWEEP");
      * servo_sweep_left_fine();
-     *
-     * blink_pe8(1, 150, 150);
-     * oled_show_string_8x16_offset(1, 0, "1: RIGHT FINE SWEEP");
      * servo_sweep_right_fine();
      */
 
-    /* Phase 1: servo sweep, both extremes */
+    /* Routine both-extremes verification hold. Disabled during calibration
+     * because it drives to SERVO_ANGLE_MAX_LEFT/RIGHT_RAD, whose provenance
+     * is exactly what is under question - restore it once the limits below
+     * have been measured and those constants updated.
+     *
+     * blink_pe8(1, 150, 150);
+     * oled_show_string_8x16_offset(1, 0, "1: SERVO SWEEP");
+     * servo_sweep();
+     */
+
+    /* PHASE 1 - straight line through the PID loop. Needs floor space and the
+     * motor switch on. Steering is centered via servo_set_angle(0.0f), which
+     * now resolves to the MEASURED 1490us center rather than the nominal
+     * 1500us that curved right. */
     blink_pe8(1, 150, 150);
-    oled_show_string_8x16_offset(1, 0, "1: SERVO SWEEP");
-    servo_sweep();
+    servo_straight_line_pid();
+
+    /* Center trim - done, 1490us is now SERVO_PULSE_CENTER_US in servo.c.
+     * Re-enable only to re-trim; note it never returns on its own (holds each
+     * step indefinitely so power can be cut at the chosen one).
+     *
+     * blink_pe8(2, 150, 150);
+     * servo_cal_center_trim();
+     */
+
+    /* Steering calibration phases - both sides measured already (left 840us
+     * /35.0deg, right 2400us/29.5deg), so they are off by default. Re-enable
+     * servo_cal_verify_points() to re-check those points (measuring BOTH
+     * front wheels this time, per s_servo_cal_points), or
+     * servo_cal_right_limit() to sweep 2380-2500us and see whether the right
+     * side extends past the 2400us currently taken as its limit.
+     *
+     * blink_pe8(2, 150, 150);
+     * servo_cal_verify_points();
+     *
+     * blink_pe8(2, 150, 150);
+     * servo_cal_right_limit();
+     */
+
+    /* Left limit found at 840us (35.0deg real, chassis contact) - re-enable
+     * only to re-check that side.
+     *
+     * servo_cal_left_limit();
+     */
+
+    /* PHASE B - protractor measurement across the full range. Enable once
+     * both limits are known, after narrowing SELFTEST_CAL_MEASURE_START/END_US
+     * to sit inside them.
+     *
+     * blink_pe8(3, 150, 150);
+     * servo_cal_measure();
+     */
 
     /* Return to center and finish */
     servo_set_angle(0.0f);

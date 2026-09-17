@@ -1,3 +1,3 @@
 # mdp_stm32
 
-See [../docs/stm32/drivers.md](../docs/stm32/drivers.md) for driver implementation status.
+See [../docs/stm32/architecture.md](../docs/stm32/architecture.md) for driver implementation status.

@@ -204,30 +204,31 @@ int main(void)
             /* Render Current OLED Display Page based on g_oled_page */
             switch (g_oled_page) {
                 case 0:
-                    /* Page 1: Primary Drive, Battery & Safety Status
-                     * left/right are real encoder tick-rates (ticks/sec,
-                     * back-converted from the PID loop's measured rad/s),
-                     * not calibrated m/s (no confirmed wheel diameter/gear
-                     * ratio). */
+                    /* Page 1: everything needed to eyeball "is the hardware
+                     * OK" without a laptop - battery, ESTOP, encoder
+                     * counts, wheel speed (real tick-rate, ticks/sec, not
+                     * calibrated m/s - no confirmed wheel diameter/gear
+                     * ratio), steering angle, yaw. */
                     oled_render_page1(battery_v, motor_estop_engaged(),
                                        meas_left_rad_s * (1560.0f / (2.0f * 3.14159265f)),
                                        meas_right_rad_s * (1560.0f / (2.0f * 3.14159265f)),
                                        steer_rad * (180.0f / 3.14159265f), /* oled.h's page1 is degrees, display-only */
-                                       g_imu_data.yaw);
+                                       g_imu_data.yaw,
+                                       encoder_get_count_a(), encoder_get_count_b());
                     break;
 
                 case 1: {
-                    /* Page 2: Distance Sensors (Ultrasonic & IR) + Encoders.
-                     * Ultrasonic is a real HC-SR04 reading now (ultrasonic.c,
-                     * ported from the songli branch) - -1 means no valid
-                     * echo yet (disabled, out of range, or stale >300ms),
-                     * rendered as "--" rather than a stale/fake number.
-                     * Encoder counts merged in from the old page 3 - uptime
-                     * dropped, nobody was actually checking it here. */
+                    /* Page 2: Distance sensor detail (Ultrasonic & IR) -
+                     * secondary/debug info, already visible on Foxglove
+                     * from the Pi side, so it doesn't need to compete for
+                     * space on page 1. Ultrasonic is a real HC-SR04 reading
+                     * now (ultrasonic.c, ported from the songli branch) -
+                     * -1 means no valid echo yet (disabled, out of range,
+                     * or stale >300ms), rendered as "--" rather than a
+                     * stale/fake number. */
                     float ultrasonic_cm = -1.0f;
                     (void)ultrasonic_get_distance_cm(&ultrasonic_cm);
-                    oled_render_page2(ultrasonic_cm, ir_distance_cm,
-                                       encoder_get_count_a(), encoder_get_count_b());
+                    oled_render_page2(ultrasonic_cm, ir_distance_cm);
                     break;
                 }
 

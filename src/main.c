@@ -14,7 +14,7 @@
 #include "encoder.h"
 #include "selftest.h"
 #include "battery.h"
-#include "ir_sensor.h"
+#include "ir.h"
 #include "ultrasonic.h"
 
 void SystemClock_Config(void);
@@ -48,7 +48,7 @@ int main(void)
     button_init();
     servo_init();
     battery_init();
-    ir_sensor_init();
+    ir_init();
     ultrasonic_init();
     motor_pid_init(); /* must come after motor_init()/encoder_init() above */
     int imu_status = imu_init();
@@ -208,9 +208,9 @@ int main(void)
 
             battery_v = battery_read_voltage();
 
-            ir_raw = ir_sensor_read_raw();
+            ir_raw = ir_read_raw();
             ir_voltage = (float)ir_raw * (3.3f / 4095.0f);
-            ir_distance_cm = ir_sensor_raw_to_distance_cm(ir_raw);
+            ir_distance_cm = ir_raw_to_distance_cm(ir_raw);
 
             /* Render Current OLED Display Page based on g_oled_page */
             switch (g_oled_page) {

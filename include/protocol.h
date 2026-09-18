@@ -49,6 +49,11 @@ typedef struct {
     float    gyro_y;        /* deg/s */
     float    gyro_z;        /* deg/s */
     float    yaw_deg;       /* Bias-corrected gyro-Z integration (deg), no accel/mag fusion */
+    uint16_t servo_pwm_us;  /* Live pulse width actually being sent to the
+                              * servo (servo_get_pulse_us(), read back from
+                              * TIM12_CH2's compare register) - not just the
+                              * last commanded angle re-derived, the real
+                              * value in hardware right now. */
     uint8_t  imu_ready;     /* 1 = IMU detected and operational */
     uint8_t  estop;         /* 1 = e-stop engaged (PD3) */
     float    battery_v;     /* Battery pack voltage (V), PB0/ADC1_CH8 */

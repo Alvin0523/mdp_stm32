@@ -196,10 +196,20 @@ void oled_render_page1(float battery_v, uint8_t estop_state, float left_speed, f
 {
     char buf[16];
 
-    snprintf(buf, sizeof(buf), "SYS:OK  %.1fV", battery_v);
+    /* Fixed field width (%4.1f) so "9.9" and "10.0" render as the same
+     * total character count - oled_show_string_8x16_offset() only
+     * overwrites glyph cells for the new string's own length, so a shorter
+     * string here would leave a stray glyph from the previous longer one
+     * (this is what caused "9.9VV" - the trailing V from "10.0V" never got
+     * erased when the value dropped to one digit). */
+    snprintf(buf, sizeof(buf), "SYS:OK %4.1fV", battery_v);
     oled_show_string_8x16_offset(0, 12, buf);
 
-    snprintf(buf, sizeof(buf), "ESTOP: %s", estop_state ? "ENGAGED" : "READY ");
+    /* Same fixed-width reasoning: "ENGAGED" (7 chars) and "READY" both need
+     * to render at 7 characters, or the shorter one leaves a stray glyph
+     * behind (this caused a leftover "D" from "ENGAGED" persisting after
+     * switching to "READY"). */
+    snprintf(buf, sizeof(buf), "ESTOP: %-7s", estop_state ? "ENGAGED" : "READY");
     oled_show_string_8x16_offset(1, 12, buf);
 
     snprintf(buf, sizeof(buf), "L:%.2f  R:%.2f", left_speed, right_speed);

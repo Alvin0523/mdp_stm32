@@ -463,6 +463,44 @@ static void servo_cal_measure(void)
  * reset the board to get out. That is the intended way to use it (cut power
  * at the step you want), but it does mean the robot is parked in calibration
  * mode until reset. */
+/* Full-range step-through, PWM only, no timeout - the simple version, one
+ * PE0 press per step, OLED just shows the raw pulse. 840/2400 are the two
+ * measured limits (servo.h); +/-50us margin on each side so the very first
+ * and last steps sit just past both known limits rather than exactly on
+ * them. 20us steps -> (2450-790)/20 = 83 steps across the full range,
+ * ~1-1.5deg of real wheel angle per step depending on side. Holds
+ * indefinitely like servo_cal_center_trim() - no auto-recenter, cut power
+ * to exit. */
+#define SELFTEST_FULLRANGE_START_US (840U - 50U)
+#define SELFTEST_FULLRANGE_END_US   (2400U + 50U)
+#define SELFTEST_FULLRANGE_STEP_US  20U
+
+static void servo_cal_full_range(void)
+{
+    char buf[20];
+    int32_t pulse = (int32_t)SELFTEST_FULLRANGE_START_US;
+
+    oled_clear();
+    oled_show_string_8x16_offset(0, 0, "FULL RANGE");
+    oled_show_string_8x16_offset(3, 0, "PE0=next step");
+
+    for (;;) {
+        servo_set_pulse_us((uint16_t)pulse);
+
+        snprintf(buf, sizeof(buf), "PULSE %4u us", (unsigned)servo_get_pulse_us());
+        oled_show_string_8x16_offset(1, 0, buf);
+
+        /* No timeout - hold this position until the button is pressed. */
+        (void)wait_for_button_press(0xFFFFFFFFU);
+
+        if (pulse + (int32_t)SELFTEST_FULLRANGE_STEP_US <= (int32_t)SELFTEST_FULLRANGE_END_US) {
+            pulse += (int32_t)SELFTEST_FULLRANGE_STEP_US;
+        } else {
+            oled_show_string_8x16_offset(2, 0, "END - HOLDING");
+        }
+    }
+}
+
 static void servo_cal_center_trim(void)
 {
     char buf[20];
@@ -701,31 +739,25 @@ void selftest_run(void)
      * servo_straight_line_pid();
      */
 
-    /* Phase 5 - right steering limit. Paused on center trim to check the
-     * right limit first - left (840us/35deg, chassis contact) is a hard
-     * mechanical stop and already confirmed; right (2400us/29.5deg) was
-     * flagged in servo.h as NOT confirmed - measurement just stopped there,
-     * wheel was still tracking. Sweeps 2380-2500us in 10us steps, one step
-     * per PE0 press, 30s per-step timeout (auto-recenters if you walk away -
-     * unlike center trim, this one does NOT hold forever). Watch/listen for
-     * the step where it stalls (audible buzz/whine, no visible motion) or
-     * hits chassis/linkage contact - stop at the LAST CLEAN step, not the
-     * one that stalled. Disable again once the real limit is found and
-     * SERVO_CAL_RIGHT_ANGLE_DEG/pulse is updated in servo.h.
-     *
-     * blink_pe8(2, 150, 150);
-     * servo_cal_center_trim();      // holds indefinitely, never returns -
-     *                               // paused, not abandoned; re-enable once
-     *                               // the right limit is settled
-     */
+    /* Phase 5 - full-range PWM step-through, both limits covered in one
+     * pass instead of separate left/right tools. 790-2450us (840/2400
+     * measured limits +/-50us margin), 20us steps, no timeout - holds
+     * indefinitely like center trim, cut power to exit. OLED shows raw
+     * pulse only. Disable again once done exploring the range. */
     blink_pe8(2, 150, 150);
-    servo_cal_right_limit();      // sweeps 2380-2500us
+    servo_cal_full_range();
 
     /* ------------------------------------------------------------------
      * Remaining steering-calibration tooling below is intentionally NOT
      * part of the routine sequence above - re-enable individual calls here
      * only when actually re-calibrating, see the RAW-PULSE CALIBRATION
      * block and its functions' own doc comments further up this file.
+     *
+     * blink_pe8(2, 150, 150);
+     * servo_cal_center_trim();      // holds indefinitely, never returns
+     *
+     * blink_pe8(2, 150, 150);
+     * servo_cal_right_limit();      // sweeps 2380-2500us, 30s/step timeout
      *
      * blink_pe8(2, 150, 150);
      * servo_cal_verify_points();

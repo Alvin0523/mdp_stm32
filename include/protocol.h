@@ -49,12 +49,21 @@ typedef struct {
     float    gyro_y;        /* deg/s */
     float    gyro_z;        /* deg/s */
     float    yaw_deg;       /* Bias-corrected gyro-Z integration (deg), no accel/mag fusion */
+    uint16_t servo_pwm_us;  /* Live pulse width actually being sent to the
+                              * servo (servo_get_pulse_us(), read back from
+                              * TIM12_CH2's compare register) - not just the
+                              * last commanded angle re-derived, the real
+                              * value in hardware right now. */
     uint8_t  imu_ready;     /* 1 = IMU detected and operational */
     uint8_t  estop;         /* 1 = e-stop engaged (PD3) */
     float    battery_v;     /* Battery pack voltage (V), PB0/ADC1_CH8 */
     uint16_t ir_raw;        /* IR ADC reading (0-4095), PC2/ADC1_CH12 */
     float    ir_voltage;    /* IR sensor output voltage (V) */
     float    ir_distance_cm; /* Estimated IR distance (cm) */
+    float    ultrasonic_cm;  /* HC-SR04 distance (cm), TIM5 input capture on
+                               * PA2/PA3 (ultrasonic.c) - negative means no
+                               * valid echo (disabled, out of range, or the
+                               * last valid reading is stale >300ms) */
     uint32_t uptime_ms;
     uint8_t  checksum;      /* XOR of all bytes from 'type' through 'uptime_ms' */
 } telemetry_packet_t;

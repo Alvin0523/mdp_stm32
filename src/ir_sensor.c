@@ -72,7 +72,11 @@ uint16_t ir_sensor_read_raw(void)
     uint16_t raw = (uint16_t)HAL_ADC_GetValue(&s_hadc1_ir);
     HAL_ADC_Stop(&s_hadc1_ir);
 
-    printf("ADC raw: %u\r\n", raw);
+    /* Was unconditional on every read (5Hz, forever) - drowned out anything
+     * else on USART1. The value is visible via /ir (ROS/Foxglove) and the
+     * OLED now, so this isn't needed for normal operation. Re-enable only
+     * for standalone bench bring-up with no Pi/ROS connected. */
+    /* printf("ADC raw: %u\r\n", raw); */
     return raw;
 }
 

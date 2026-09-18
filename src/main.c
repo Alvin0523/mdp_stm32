@@ -173,6 +173,7 @@ int main(void)
              * expects degrees here and converts back to radians itself) -
              * derive it from the radian value we actually work in now. */
             telemetry.steer_deg = steer_rad * (180.0f / 3.14159265f);
+            telemetry.servo_pwm_us = servo_get_pulse_us();
             telemetry.accel_x = g_imu_data.accel_x;
             telemetry.accel_y = g_imu_data.accel_y;
             telemetry.accel_z = g_imu_data.accel_z;
@@ -186,6 +187,16 @@ int main(void)
             telemetry.ir_raw = ir_raw;
             telemetry.ir_voltage = ir_voltage;
             telemetry.ir_distance_cm = ir_distance_cm;
+            /* ultrasonic_update() runs every raw loop pass (not tiered, see
+             * its call near the top of this loop), so this read is always
+             * fresh regardless of which OLED page is selected - unlike
+             * battery/IR above, which are genuinely slow-tier-owned
+             * (blocking ADC reads). */
+            {
+                float ultrasonic_cm = -1.0f;
+                (void)ultrasonic_get_distance_cm(&ultrasonic_cm);
+                telemetry.ultrasonic_cm = ultrasonic_cm;
+            }
             telemetry.uptime_ms = HAL_GetTick();
             uart_send_telemetry(&telemetry);
         }
@@ -260,8 +271,13 @@ int main(void)
                     break;
             }
 
-            printf("[IMU Telemetry] Yaw: %+6.1f deg | GyroZ: %+6.1f deg/s | AccelX: %+5.2f m/s^2 | Page: %d\r\n",
-                   g_imu_data.yaw, g_imu_data.gyro_z, g_imu_data.accel_x, g_oled_page + 1);
+            /* Was unconditional at 5Hz forever. Same data is all on
+             * Foxglove now (/imu/data, /joint_states, etc.) once the Pi
+             * side is up, so this just adds console noise in that case.
+             * Re-enable only for standalone bench bring-up with no Pi/ROS
+             * connected. */
+            /* printf("[IMU Telemetry] Yaw: %+6.1f deg | GyroZ: %+6.1f deg/s | AccelX: %+5.2f m/s^2 | Page: %d\r\n",
+                      g_imu_data.yaw, g_imu_data.gyro_z, g_imu_data.accel_x, g_oled_page + 1); */
         }
     }
 }

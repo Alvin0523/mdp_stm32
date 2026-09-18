@@ -60,9 +60,17 @@ void EXTI0_IRQHandler(void)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     if (GPIO_Pin == GPIO_PIN_0) {
-        /* Debounce button press (200ms cooldown) */
+        /* Debounce button press. Was 200ms - a worn/dirty tactile switch can
+         * bounce on release too, and a bounce edge landing just past a
+         * short window reads as a legitimate second press (symptom: OLED
+         * page cycling skips 2 pages instead of 1 on a single physical
+         * click). Widened as a safe mitigation - nobody needs to
+         * double-click this button, so a longer cooldown costs nothing. If
+         * this is still flaky after reflashing, it's likely the physical
+         * switch itself (contact wear/dirt), not something fixable in
+         * software. */
         uint32_t now = HAL_GetTick();
-        if (now - s_last_button_tick > 200) {
+        if (now - s_last_button_tick > 400) {
             s_last_button_tick = now;
             s_selftest_requested = 1; /* run self-test from the main loop */
         }

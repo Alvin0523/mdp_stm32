@@ -173,6 +173,7 @@ int main(void)
              * expects degrees here and converts back to radians itself) -
              * derive it from the radian value we actually work in now. */
             telemetry.steer_deg = steer_rad * (180.0f / 3.14159265f);
+            telemetry.servo_pwm_us = servo_get_pulse_us();
             telemetry.accel_x = g_imu_data.accel_x;
             telemetry.accel_y = g_imu_data.accel_y;
             telemetry.accel_z = g_imu_data.accel_z;

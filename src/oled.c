@@ -283,11 +283,11 @@ void oled_render_page3(float gyro_x, float gyro_y, float gyro_z)
 
     oled_show_string_8x16_offset(0, 12, "==GYRO dps===");
 
-    /* deg/s, bias-corrected + unit-scaled (imu.c) but NOT further filtered -
-     * this is what the Pi-side EKF actually fuses (Z only, see ekf.yaml).
-     * One axis per row - three floats with labels do not fit on one 116px
-     * row at any useful precision. */
-    snprintf(buf, sizeof(buf), "X:%+7.2f", (double)gyro_x);
+    if (us_cm >= 0.0f) {
+        snprintf(buf, sizeof(buf), "Ultra:%5.1fcm ", us_cm);
+    } else {
+        snprintf(buf, sizeof(buf), "Ultra: --     ");
+    }
     oled_show_string_8x16_offset(1, 12, buf);
 
     snprintf(buf, sizeof(buf), "Y:%+7.2f", (double)gyro_y);

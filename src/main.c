@@ -271,8 +271,13 @@ int main(void)
                     break;
             }
 
-            printf("[IMU Telemetry] Yaw: %+6.1f deg | GyroZ: %+6.1f deg/s | AccelX: %+5.2f m/s^2 | Page: %d\r\n",
-                   g_imu_data.yaw, g_imu_data.gyro_z, g_imu_data.accel_x, g_oled_page + 1);
+            /* Was unconditional at 5Hz forever. Same data is all on
+             * Foxglove now (/imu/data, /joint_states, etc.) once the Pi
+             * side is up, so this just adds console noise in that case.
+             * Re-enable only for standalone bench bring-up with no Pi/ROS
+             * connected. */
+            /* printf("[IMU Telemetry] Yaw: %+6.1f deg | GyroZ: %+6.1f deg/s | AccelX: %+5.2f m/s^2 | Page: %d\r\n",
+                      g_imu_data.yaw, g_imu_data.gyro_z, g_imu_data.accel_x, g_oled_page + 1); */
         }
     }
 }

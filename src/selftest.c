@@ -254,22 +254,22 @@ static void servo_sweep(void)
 
 /* --- Center trim: find the pulse width that actually rolls straight ---
  *
- * 1500us is the nominal mechanical center but has never been verified. With
- * the motors off and the car pushed by hand it curves RIGHT, which isolates
- * the fault to steering geometry - no motor or PID contribution is possible
- * in that test. Curving right means true straight-ahead sits at a SHORTER
- * pulse than 1500 (shorter = left on this unit, per the measured endpoints:
- * 840us at +35deg left, 2400us at -29.5deg right), so this sweeps downward.
+ * 1500us is the nominal mechanical center but has never been verified.
+ * Direction flipped from the original assumption here: this unit's hand-push
+ * test at 1500us curves LEFT (not right, as first assumed) - decreasing the
+ * pulse moves further left (confirmed sign convention: shorter pulse = left,
+ * per the measured endpoints: 840us at +35deg left, 2400us at -29.5deg
+ * right), so correcting a left curve means sweeping UPWARD instead.
  *
- * 5us steps are ~0.27deg of real wheel angle each (left-side resolution is
- * 0.053deg/us), fine enough to land on straight without being tedious. If the
- * whole range is exhausted while it still curves right, lower
- * SELFTEST_TRIM_END_US further.
+ * 5us steps are ~0.19deg of real wheel angle each on this side (right-side
+ * resolution is 0.038deg/us, per SERVO_US_PER_RAD_RIGHT), fine enough to
+ * land on straight without being tedious. If the whole range is exhausted
+ * while it still curves left, raise SELFTEST_TRIM_END_US further.
  *
  * Each step is HELD indefinitely - no timeout, no auto-recenter - so the car
  * can be pushed repeatedly at one setting and power cut at the good one. */
 #define SELFTEST_TRIM_START_US 1500U
-#define SELFTEST_TRIM_END_US   1430U
+#define SELFTEST_TRIM_END_US   1570U
 #define SELFTEST_TRIM_STEP_US     5U
 
 /* --- Phase A: mechanical limit finding, one side at a time ---
@@ -470,7 +470,7 @@ static void servo_cal_center_trim(void)
 
     oled_clear();
     oled_show_string_8x16_offset(0, 0, "CENTER TRIM");
-    oled_show_string_8x16_offset(3, 0, "PE0=-5us PUSH");
+    oled_show_string_8x16_offset(3, 0, "PE0=+5us PUSH");
 
     for (;;) {
         servo_set_pulse_us((uint16_t)pulse);
@@ -484,12 +484,12 @@ static void servo_cal_center_trim(void)
         /* No timeout - hold this position until the button is pressed. */
         (void)wait_for_button_press(0xFFFFFFFFU);
 
-        if (pulse - (int32_t)SELFTEST_TRIM_STEP_US >= (int32_t)SELFTEST_TRIM_END_US) {
-            pulse -= (int32_t)SELFTEST_TRIM_STEP_US;
+        if (pulse + (int32_t)SELFTEST_TRIM_STEP_US <= (int32_t)SELFTEST_TRIM_END_US) {
+            pulse += (int32_t)SELFTEST_TRIM_STEP_US;
         } else {
-            /* Bottom of the range and still curving right - hold here rather
-             * than wrapping or recentering, and widen SELFTEST_TRIM_END_US. */
-            oled_show_string_8x16_offset(3, 0, "END-LOWER RANGE");
+            /* Top of the range and still curving left - hold here rather
+             * than wrapping or recentering, and raise SELFTEST_TRIM_END_US. */
+            oled_show_string_8x16_offset(3, 0, "END-RAISE RANGE");
         }
     }
 }

@@ -15,6 +15,7 @@
 #include "selftest.h"
 #include "battery.h"
 #include "ir_sensor.h"
+#include "ultrasonic.h"
 
 void SystemClock_Config(void);
 
@@ -48,6 +49,7 @@ int main(void)
     servo_init();
     battery_init();
     ir_sensor_init();
+    ultrasonic_init();
     motor_pid_init(); /* must come after motor_init()/encoder_init() above */
     int imu_status = imu_init();
 
@@ -108,6 +110,11 @@ int main(void)
 
     while (1)
     {
+        /* Non-blocking trigger/capture state machine (TIM5 input capture on
+         * PA2/PA3) - runs every pass, not tiered, same as ported from the
+         * songli branch's implementation. */
+        ultrasonic_update();
+
         /* PE0 press during normal operation is dual-purpose, gated on PD3:
          * - PD3 ready (not engaged): self-test can actually drive the
          *   motors, so run it (outside the ISR, since it blocks).
@@ -197,32 +204,34 @@ int main(void)
             /* Render Current OLED Display Page based on g_oled_page */
             switch (g_oled_page) {
                 case 0:
-                    /* Page 1: Primary Drive & Battery Status
+                    /* Page 1: Primary Drive, Battery & Safety Status
                      * left/right are real encoder tick-rates (ticks/sec,
                      * back-converted from the PID loop's measured rad/s),
                      * not calibrated m/s (no confirmed wheel diameter/gear
                      * ratio). */
-                    oled_render_page1(battery_v,
+                    oled_render_page1(battery_v, motor_estop_engaged(),
                                        meas_left_rad_s * (1560.0f / (2.0f * 3.14159265f)),
                                        meas_right_rad_s * (1560.0f / (2.0f * 3.14159265f)),
                                        steer_rad * (180.0f / 3.14159265f), /* oled.h's page1 is degrees, display-only */
                                        g_imu_data.yaw);
                     break;
 
-                case 1:
-                    /* Page 2: Distance Sensors (Ultrasonic & IR). */
-                    oled_render_page2(18.5f, ir_raw, ir_voltage, ir_distance_cm);
+                case 1: {
+                    /* Page 2: Distance Sensors (Ultrasonic & IR). Ultrasonic
+                     * is a real HC-SR04 reading now (ultrasonic.c, ported
+                     * from the songli branch) - -1 means no valid echo yet
+                     * (disabled, out of range, or stale >300ms), rendered
+                     * as "--" rather than a stale/fake number. */
+                    float ultrasonic_cm = -1.0f;
+                    (void)ultrasonic_get_distance_cm(&ultrasonic_cm);
+                    oled_render_page2(ultrasonic_cm, ir_distance_cm);
                     break;
+                }
 
                 case 2:
-                    /* Page 3: Safety & Hardware Diagnostics */
-                    oled_render_page3(motor_estop_engaged(), encoder_get_count_a(),
+                    /* Page 3: Hardware Diagnostics (ESTOP moved to page 1) */
+                    oled_render_page3(encoder_get_count_a(),
                                        encoder_get_count_b(), HAL_GetTick() / 1000U);
-                    break;
-
-                case 3:
-                    /* Page 4: Bezel Alignment Calibration Test Page */
-                    oled_render_page4();
                     break;
 
                 default:

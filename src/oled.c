@@ -202,29 +202,27 @@ void oled_show_string_8x16_offset(uint8_t row, uint8_t x_offset, const char *str
     }
 }
 
-void oled_render_page1(float battery_v, uint8_t estop_state, float left_speed, float right_speed, float steer_deg, float yaw_deg)
+void oled_render_page1(float battery_v, uint8_t estop_state, float left_speed, float right_speed,
+                        float steer_deg, float yaw_deg, int32_t enc_left, int32_t enc_right)
 {
     char buf[16];
 
-    /* Fixed field width (%4.1f) so "9.9" and "10.0" render as the same
-     * total character count - oled_show_string_8x16_offset() only
-     * overwrites glyph cells for the new string's own length, so a shorter
-     * string here would leave a stray glyph from the previous longer one
-     * (this is what caused "9.9VV" - the trailing V from "10.0V" never got
-     * erased when the value dropped to one digit).
-     *
-     * Was "SYS:OK ..." before - that label was hardcoded, never actually
-     * reflecting any real check (would still say "OK" even if the IMU
-     * failed to init). Just labels the number now instead of pretending
-     * to be a status check it isn't. */
-    snprintf(buf, sizeof(buf), "BATT: %4.1fV", battery_v);
+    /* Battery + ESTOP combined onto one row (was two separate rows) - both
+     * fixed-width so a value change can't leave a stray glyph behind (this
+     * is what caused "9.9VV" and a leftover "D" from "ENGAGED" before):
+     * %4.1f is constant width regardless of digit count, and "ENG"/"RDY"
+     * are both exactly 3 characters, no padding needed either way. */
+    snprintf(buf, sizeof(buf), "B:%4.1fV ES:%s", (double)battery_v, estop_state ? "ENG" : "RDY");
     oled_show_string_8x16_offset(0, 12, buf);
 
-    /* Same fixed-width reasoning: "ENGAGED" (7 chars) and "READY" both need
-     * to render at 7 characters, or the shorter one leaves a stray glyph
-     * behind (this caused a leftover "D" from "ENGAGED" persisting after
-     * switching to "READY"). */
-    snprintf(buf, sizeof(buf), "ESTOP: %-7s", estop_state ? "ENGAGED" : "READY");
+    /* Encoder counts, moved up from page 2 to make room there and keep
+     * everything drive-related on one page. "ENC left:right" rather than
+     * this page's "L:.. R:.." style below on purpose - that L/R is wheel
+     * SPEED (ticks/sec), this is cumulative tick COUNT, a different
+     * quantity that would look like the same thing sharing that label.
+     * Width 5 on the numbers (not 4) since encoder counts can run into 5
+     * digits over a session, unlike the small values below. */
+    snprintf(buf, sizeof(buf), "ENC%5ld:%5ld", (long)enc_left, (long)enc_right);
     oled_show_string_8x16_offset(1, 12, buf);
 
     /* Display is 128px wide, this row starts at x=12, so there's only
@@ -247,7 +245,7 @@ void oled_render_page1(float battery_v, uint8_t estop_state, float left_speed, f
     oled_show_string_8x16_offset(3, 12, buf);
 }
 
-void oled_render_page2(float us_cm, float ir_cm, int32_t enc_left, int32_t enc_right)
+void oled_render_page2(float us_cm, float ir_cm)
 {
     char buf[16];
     char numbuf[8];
@@ -271,20 +269,6 @@ void oled_render_page2(float us_cm, float ir_cm, int32_t enc_left, int32_t enc_r
      * the raw ADC count and volts it used to also print alongside it. */
     snprintf(buf, sizeof(buf), "IR:   %5.1fcm", (double)ir_cm);
     oled_show_string_8x16_offset(2, 12, buf);
-
-    /* Encoder counts merged in here (was a separate page) - uptime dropped,
-     * it wasn't something anyone was actually checking on this screen.
-     * "ENC left:right" rather than page 1's "L:.. R:.." style on purpose -
-     * page 1's L/R is wheel SPEED (ticks/sec), this is cumulative tick
-     * COUNT, a different quantity entirely; matching labels across both
-     * would make them look like the same thing at a glance.
-     * Width 5 kept (not 4) since encoder counts can run into 5 digits
-     * over a session, unlike the small values on page 1 - the "R: 0"
-     * overflow was from the old label/spacing overhead, not the value
-     * itself, so tightening ENC's own label recovers that margin instead
-     * of shrinking the numbers' actual range. */
-    snprintf(buf, sizeof(buf), "ENC%5ld:%5ld", (long)enc_left, (long)enc_right);
-    oled_show_string_8x16_offset(3, 12, buf);
 }
 
 void oled_next_page(void)

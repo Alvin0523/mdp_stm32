@@ -601,6 +601,47 @@ static void servo_cal_center_trim(void)
     }
 }
 
+/* Angle-driven verify sweep: commands a REAL ANGLE (not a raw pulse) via
+ * servo_set_angle_raw() (bypasses the operating clamp, same as the other
+ * calibration tools, so the full measured range is reachable) and shows
+ * both the commanded angle and the resulting PWM. Lets a protractor
+ * reading at the wheel be checked directly against what the model predicts
+ * for that angle - straight line on the left, cubic Hermite on the right
+ * (see servo.c's servo_write_angle_unclamped()/servo_right_hermite_pulse_us()).
+ * No timeout - hold each angle as long as needed to read the protractor,
+ * PE0 for next step. */
+#define SELFTEST_VERIFY_ANGLE_START_DEG (-29.5f)
+#define SELFTEST_VERIFY_ANGLE_END_DEG     35.0f
+#define SELFTEST_VERIFY_ANGLE_STEP_DEG     5.0f
+
+static void servo_cal_verify_curve(void)
+{
+    char buf[20];
+    float angle_deg = SELFTEST_VERIFY_ANGLE_START_DEG;
+
+    oled_clear();
+    oled_show_string_8x16_offset(0, 0, "VERIFY CURVE");
+    oled_show_string_8x16_offset(3, 0, "PE0=next step");
+
+    for (;;) {
+        servo_set_angle_raw(angle_deg * (3.14159265f / 180.0f));
+
+        snprintf(buf, sizeof(buf), "ANGLE %+5.1f deg", (double)angle_deg);
+        oled_show_string_8x16_offset(1, 0, buf);
+        snprintf(buf, sizeof(buf), "PWM   %4u us", (unsigned)servo_get_pulse_us());
+        oled_show_string_8x16_offset(2, 0, buf);
+
+        /* No timeout - hold this angle until the button is pressed. */
+        (void)wait_for_button_press(0xFFFFFFFFU);
+
+        if (angle_deg + SELFTEST_VERIFY_ANGLE_STEP_DEG <= SELFTEST_VERIFY_ANGLE_END_DEG) {
+            angle_deg += SELFTEST_VERIFY_ANGLE_STEP_DEG;
+        } else {
+            oled_show_string_8x16_offset(3, 0, "END - HOLDING");
+        }
+    }
+}
+
 /* --- Recorded (pulse, real angle) data points, for re-measurement ---
  *
  * Every angle here is a REAL protractor reading at the wheel, NOT the
@@ -808,14 +849,14 @@ void selftest_run(void)
      * servo_straight_line_pid();
      */
 
-    /* Phase 5 - smooth automatic sweep, no button presses needed: center ->
-     * 900 -> 2500, 1us steps at 20us/sec. Fully hands-off, just watch/
-     * listen for where it stalls or hits contact. Disable again (comment
-     * out) once done, and swap back to servo_cal_full_range() (the stepped
-     * two-window version, still defined above) if fine manual stepping is
-     * wanted again. */
+    /* Phase 5 - verify curve against a protractor. Commands real angles
+     * (not raw pulses) in 5deg steps across the full range, showing both
+     * the commanded angle and the resulting PWM - hold each step to check
+     * the wheel's actual angle with a protractor against what's displayed.
+     * Tests the new cubic Hermite mapping on the right side (servo.c)
+     * against real measurements. Disable again (comment out) once done. */
     blink_pe8(2, 150, 150);
-    servo_cal_smooth_sweep();
+    servo_cal_verify_curve();
 
     /* ------------------------------------------------------------------
      * Remaining steering-calibration tooling below is intentionally NOT

@@ -270,7 +270,7 @@ void oled_render_page2(float us_cm, float ir_cm)
     snprintf(buf, sizeof(buf), "Ultra:%scm", numbuf);
     oled_show_string_8x16_offset(1, 12, buf);
 
-    /* Only one physical IR sensor is wired (ir_sensor.c), despite
+    /* Only one physical IR sensor is wired (ir.c), despite
      * docs/hardware.md listing two - shown once, in cm only, rather than
      * the raw ADC count and volts it used to also print alongside it. */
     snprintf(buf, sizeof(buf), "IR:   %5.1fcm", (double)ir_cm);

@@ -271,8 +271,71 @@ void oled_render_page2(float us_cm, float ir_cm)
     oled_show_string_8x16_offset(2, 12, buf);
 }
 
+void oled_render_page3(float gyro_x, float gyro_y, float gyro_z)
+{
+    char buf[16];
+
+    oled_show_string_8x16_offset(0, 12, "==GYRO dps===");
+
+    /* deg/s, bias-corrected + unit-scaled (imu.c) but NOT further filtered -
+     * this is what the Pi-side EKF actually fuses (Z only, see ekf.yaml).
+     * One axis per row - three floats with labels do not fit on one 116px
+     * row at any useful precision. */
+    snprintf(buf, sizeof(buf), "X:%+7.2f", (double)gyro_x);
+    oled_show_string_8x16_offset(1, 12, buf);
+
+    snprintf(buf, sizeof(buf), "Y:%+7.2f", (double)gyro_y);
+    oled_show_string_8x16_offset(2, 12, buf);
+
+    snprintf(buf, sizeof(buf), "Z:%+7.2f", (double)gyro_z);
+    oled_show_string_8x16_offset(3, 12, buf);
+}
+
+void oled_render_page4(float accel_x, float accel_y, float accel_z)
+{
+    char buf[16];
+
+    oled_show_string_8x16_offset(0, 12, "==ACCEL m/s2=");
+
+    /* Raw ADC x fixed scale ONLY - unlike gyro, there is no bias
+     * calibration applied to accel at all (see imu.c). Robot flat and
+     * still should read ~9.81 on whichever axis is vertical, ~0 on the
+     * other two - useful sanity check for whether the IMU is mounted the
+     * orientation the firmware assumes (no axis remap applied anywhere). */
+    snprintf(buf, sizeof(buf), "X:%+6.2f", (double)accel_x);
+    oled_show_string_8x16_offset(1, 12, buf);
+
+    snprintf(buf, sizeof(buf), "Y:%+6.2f", (double)accel_y);
+    oled_show_string_8x16_offset(2, 12, buf);
+
+    snprintf(buf, sizeof(buf), "Z:%+6.2f", (double)accel_z);
+    oled_show_string_8x16_offset(3, 12, buf);
+}
+
+void oled_render_page5(uint16_t pwm_us, uint16_t pwm_center_us, float steer_deg)
+{
+    char buf[16];
+
+    oled_show_string_8x16_offset(0, 12, "==STEERING===");
+
+    /* Actual pulse width read back from TIM12_CH2's compare register
+     * (servo_get_pulse_us()) - what the servo is ACTUALLY being sent, not
+     * just what was last commanded. */
+    snprintf(buf, sizeof(buf), "PWM: %4uus", pwm_us);
+    oled_show_string_8x16_offset(1, 12, buf);
+
+    /* The calibrated center (servo_pulse_center_us(), currently 1490us) -
+     * shown alongside PWM so a center-trim check doesn't need ROS/a
+     * laptop, just watch this while at angle 0. */
+    snprintf(buf, sizeof(buf), "CTR: %4uus", pwm_center_us);
+    oled_show_string_8x16_offset(2, 12, buf);
+
+    snprintf(buf, sizeof(buf), "ANGLE:%+4.0f", (double)steer_deg);
+    oled_show_string_8x16_offset(3, 12, buf);
+}
+
 void oled_next_page(void)
 {
-    g_oled_page = (g_oled_page + 1) % 2; /* Loop through 2 pages */
+    g_oled_page = (g_oled_page + 1) % 5; /* Loop through 5 pages */
     oled_clear();
 }

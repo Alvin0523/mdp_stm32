@@ -503,6 +503,58 @@ static void servo_cal_full_range_window(uint16_t start_us, uint16_t end_us,
     }
 }
 
+/* Smooth automatic sweep, no button presses - center -> 900 -> 2500, 1us
+ * steps. "20us/sec" requested -> 1us every 1000/20 = 50ms. OLED redraw is
+ * throttled to every 4th step (~200ms) rather than every single 1us step
+ * (~20Hz) - the bit-banged display write has its own overhead, and the
+ * physical smoothness comes from the PWM step rate, not how often the
+ * number on screen refreshes. */
+#define SELFTEST_SMOOTH_STEP_US        1U
+#define SELFTEST_SMOOTH_STEP_DELAY_MS 50U /* 1us / 50ms = 20us/sec */
+#define SELFTEST_SMOOTH_OLED_EVERY_N   4U /* redraw every 4th step (~200ms) */
+
+static void servo_cal_smooth_sweep_to(int32_t *pulse, int32_t target_us)
+{
+    char buf[20];
+    const int32_t step = (target_us >= *pulse) ? (int32_t)SELFTEST_SMOOTH_STEP_US
+                                                : -(int32_t)SELFTEST_SMOOTH_STEP_US;
+    uint32_t n = 0;
+
+    while (*pulse != target_us) {
+        *pulse += step;
+        servo_set_pulse_us((uint16_t)*pulse);
+        HAL_Delay(SELFTEST_SMOOTH_STEP_DELAY_MS);
+
+        if ((n++ % SELFTEST_SMOOTH_OLED_EVERY_N) == 0) {
+            snprintf(buf, sizeof(buf), "PULSE %4u us", (unsigned)servo_get_pulse_us());
+            oled_show_string_8x16_offset(1, 0, buf);
+        }
+    }
+    /* Always show the true final value, even if it landed mid-throttle. */
+    snprintf(buf, sizeof(buf), "PULSE %4u us", (unsigned)servo_get_pulse_us());
+    oled_show_string_8x16_offset(1, 0, buf);
+}
+
+static void servo_cal_smooth_sweep(void)
+{
+    int32_t pulse = (int32_t)servo_pulse_center_us();
+
+    oled_clear();
+    oled_show_string_8x16_offset(0, 0, "SMOOTH SWEEP");
+
+    oled_show_string_8x16_offset(3, 0, "CTR -> 900");
+    servo_cal_smooth_sweep_to(&pulse, 900);
+    HAL_Delay(500); /* brief pause at the turnaround point */
+
+    oled_show_string_8x16_offset(3, 0, "900 -> 2500");
+    servo_cal_smooth_sweep_to(&pulse, 2500);
+
+    oled_show_string_8x16_offset(2, 0, "DONE - HOLDING");
+    for (;;) {
+        HAL_Delay(1000);
+    }
+}
+
 static void servo_cal_full_range(void)
 {
     servo_cal_full_range_window(SELFTEST_FULLRANGE_LEFT_START_US, SELFTEST_FULLRANGE_LEFT_END_US,
@@ -756,13 +808,14 @@ void selftest_run(void)
      * servo_straight_line_pid();
      */
 
-    /* Phase 5 - full-range PWM step-through, both limits covered in one
-     * pass instead of separate left/right tools. 790-2450us (840/2400
-     * measured limits +/-50us margin), 20us steps, no timeout - holds
-     * indefinitely like center trim, cut power to exit. OLED shows raw
-     * pulse only. Disable again once done exploring the range. */
+    /* Phase 5 - smooth automatic sweep, no button presses needed: center ->
+     * 900 -> 2500, 1us steps at 20us/sec. Fully hands-off, just watch/
+     * listen for where it stalls or hits contact. Disable again (comment
+     * out) once done, and swap back to servo_cal_full_range() (the stepped
+     * two-window version, still defined above) if fine manual stepping is
+     * wanted again. */
     blink_pe8(2, 150, 150);
-    servo_cal_full_range();
+    servo_cal_smooth_sweep();
 
     /* ------------------------------------------------------------------
      * Remaining steering-calibration tooling below is intentionally NOT

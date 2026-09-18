@@ -1,17 +1,17 @@
 /**
- * @file ir_sensor.c
+ * @file ir.c
  * @brief Analog IR sensor driver implementation for PC1 (ADC1 channel 11).
  *
  * Analog IR sensor connected to PC1. Reads raw 12-bit ADC values where higher
  * values typically indicate closer object proximity.
  */
 
-#include "ir_sensor.h"
+#include "ir.h"
 #include <math.h>
 
 static ADC_HandleTypeDef s_hadc1_ir;
 
-void ir_sensor_init(void)
+void ir_init(void)
 {
     __HAL_RCC_GPIOC_CLK_ENABLE();
     __HAL_RCC_ADC1_CLK_ENABLE();
@@ -37,7 +37,7 @@ void ir_sensor_init(void)
     HAL_ADC_Init(&s_hadc1_ir);
 }
 
-uint16_t ir_sensor_read_raw(void)
+uint16_t ir_read_raw(void)
 {
     ADC_ChannelConfTypeDef sConfig = {0};
 
@@ -80,9 +80,9 @@ uint16_t ir_sensor_read_raw(void)
     return raw;
 }
 
-float ir_sensor_read_voltage(void)
+float ir_read_voltage(void)
 {
-    uint16_t raw = ir_sensor_read_raw();
+    uint16_t raw = ir_read_raw();
     return (float)raw / 4095.0f * 3.3f;
 }
 
@@ -91,7 +91,7 @@ float ir_sensor_read_voltage(void)
 #define IR_DISTANCE_MAX_CM     80.0f
 #define IR_DISTANCE_OFFSET_CM   0.0f
 
-float ir_sensor_raw_to_distance_cm(uint16_t raw)
+float ir_raw_to_distance_cm(uint16_t raw)
 {
     if (raw == 0U) {
         return IR_DISTANCE_MAX_CM;
@@ -113,7 +113,7 @@ float ir_sensor_raw_to_distance_cm(uint16_t raw)
     return distance;
 }
 
-float ir_sensor_read_distance_cm(void)
+float ir_read_distance_cm(void)
 {
-    return ir_sensor_raw_to_distance_cm(ir_sensor_read_raw());
+    return ir_raw_to_distance_cm(ir_read_raw());
 }

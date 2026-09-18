@@ -463,25 +463,28 @@ static void servo_cal_measure(void)
  * reset the board to get out. That is the intended way to use it (cut power
  * at the step you want), but it does mean the robot is parked in calibration
  * mode until reset. */
-/* Full-range step-through, PWM only, no timeout - the simple version, one
- * PE0 press per step, OLED just shows the raw pulse. 840/2400 are the two
- * measured limits (servo.h); +/-50us margin on each side so the very first
- * and last steps sit just past both known limits rather than exactly on
- * them. 20us steps -> (2450-790)/20 = 83 steps across the full range,
- * ~1-1.5deg of real wheel angle per step depending on side. Holds
- * indefinitely like servo_cal_center_trim() - no auto-recenter, cut power
- * to exit. */
-#define SELFTEST_FULLRANGE_START_US (840U - 50U)
-#define SELFTEST_FULLRANGE_END_US   (2400U + 50U)
-#define SELFTEST_FULLRANGE_STEP_US  20U
+/* Two-window fine step-through, PWM only, no timeout. The coarse 20us
+ * full-range pass found something interesting around 890us (left) and
+ * 2450us (right) - narrowed to just those two windows at 10us resolution
+ * instead of walking the whole 790-2450us span again. One PE0 press per
+ * step, OLED shows raw pulse + which window. Left window finishes, then
+ * continues straight into the right window (no separate restart needed) -
+ * holds indefinitely at the very end like servo_cal_center_trim(), cut
+ * power to exit. */
+#define SELFTEST_FULLRANGE_LEFT_START_US   840U
+#define SELFTEST_FULLRANGE_LEFT_END_US     950U
+#define SELFTEST_FULLRANGE_RIGHT_START_US 2300U
+#define SELFTEST_FULLRANGE_RIGHT_END_US   2500U
+#define SELFTEST_FULLRANGE_STEP_US          10U
 
-static void servo_cal_full_range(void)
+static void servo_cal_full_range_window(uint16_t start_us, uint16_t end_us,
+                                         uint16_t step_us, const char *label)
 {
     char buf[20];
-    int32_t pulse = (int32_t)SELFTEST_FULLRANGE_START_US;
+    int32_t pulse = (int32_t)start_us;
 
     oled_clear();
-    oled_show_string_8x16_offset(0, 0, "FULL RANGE");
+    oled_show_string_8x16_offset(0, 0, label);
     oled_show_string_8x16_offset(3, 0, "PE0=next step");
 
     for (;;) {
@@ -493,11 +496,25 @@ static void servo_cal_full_range(void)
         /* No timeout - hold this position until the button is pressed. */
         (void)wait_for_button_press(0xFFFFFFFFU);
 
-        if (pulse + (int32_t)SELFTEST_FULLRANGE_STEP_US <= (int32_t)SELFTEST_FULLRANGE_END_US) {
-            pulse += (int32_t)SELFTEST_FULLRANGE_STEP_US;
-        } else {
-            oled_show_string_8x16_offset(2, 0, "END - HOLDING");
+        if (pulse + (int32_t)step_us > (int32_t)end_us) {
+            return; /* window done, caller moves on (or holds, if last) */
         }
+        pulse += (int32_t)step_us;
+    }
+}
+
+static void servo_cal_full_range(void)
+{
+    servo_cal_full_range_window(SELFTEST_FULLRANGE_LEFT_START_US, SELFTEST_FULLRANGE_LEFT_END_US,
+                                 SELFTEST_FULLRANGE_STEP_US, "LEFT 840-950");
+    servo_cal_full_range_window(SELFTEST_FULLRANGE_RIGHT_START_US, SELFTEST_FULLRANGE_RIGHT_END_US,
+                                 SELFTEST_FULLRANGE_STEP_US, "RIGHT 2300-2500");
+
+    /* Both windows done - hold at the last right-side value forever rather
+     * than silently returning to the caller and re-centering. */
+    oled_show_string_8x16_offset(2, 0, "BOTH DONE-HOLD");
+    for (;;) {
+        (void)wait_for_button_press(0xFFFFFFFFU);
     }
 }
 

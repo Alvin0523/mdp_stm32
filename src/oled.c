@@ -227,13 +227,19 @@ void oled_render_page1(float battery_v, uint8_t estop_state, float left_speed, f
 
     /* Display is 128px wide, this row starts at x=12, so there's only
      * 116px = 14.5 chars of room - oled_set_pos()/oled_write_byte() never
-     * bounds-check x, so writing past column 127 wraps onto the next
-     * page instead of erroring. "%.2f" with no width was unbounded and
-     * already overflowed by 12px even at everyday values (e.g.
-     * "L:12.34  R:12.34" = 16 chars = 128px, right at the edge with zero
-     * margin) - %4.1f fixes both the width AND drops to a fixed field so
-     * it can't grow past this budget. */
-    snprintf(buf, sizeof(buf), "L:%4.1f R:%4.1f", (double)left_speed, (double)right_speed);
+     * bounds-check x, so writing past column 127 wraps onto the next page
+     * instead of erroring.
+     *
+     * PREVIOUS FIX WAS WRONG: %4.1f is a MINIMUM width, not a cap - it
+     * never truncates, it just uses more characters when the value needs
+     * them. left_speed/right_speed are tick-RATE (ticks/sec), not rad/s or
+     * a small calibrated unit - at MOTOR_MAX_WHEEL_RAD_S (34.56 rad/s) that
+     * back-converts to ~8580 ticks/sec, so "L:%4.1f R:%4.1f" was actually
+     * 136px at realistic operating speed, worse than before that "fix".
+     * Decimal precision on a value in the thousands is meaningless anyway
+     * - switched to integer display, width 5 covers the full realistic
+     * range including a 4-digit negative (reverse), 104px worst case. */
+    snprintf(buf, sizeof(buf), "L%5.0f R%5.0f", (double)left_speed, (double)right_speed);
     oled_show_string_8x16_offset(2, 12, buf);
 
     /* Y = yaw, degrees - this board's own raw gyro-integrated estimate

@@ -147,41 +147,22 @@ void servo_init(void)
     HAL_TIM_PWM_Start(&s_htim12, TIM_CHANNEL_2);
 }
 
-/* Right-side cubic Hermite spline, replacing straight-line interpolation on
- * that side only. Reasoning: a smooth full-range PWM sweep (hand-observed on
- * this unit) showed a clearly SMALLER real wheel-angle change per
- * microsecond of pulse near the 2400us limit than near center - the true
- * response flattens in angle terms (equivalently, steepens in
- * pulse-per-angle terms) approaching that lock, not a straight line. This
- * matches the physical theory behind WHEELTEC's own reference cubic PWM fit
- * (see commit b8ed0a6): a rigid Ackermann linkage's mechanical advantage
- * genuinely varies nonlinearly - their numeric coefficients didn't transfer
- * to this chassis (confirmed wrong by protractor, see commit 4829d88), but
- * the underlying curved-not-straight shape is real.
+/* PARKED FOR LATER REVIEW - "the WHEELTEC way": a right-side cubic Hermite
+ * spline, curved instead of a straight line, on the theory that a rigid
+ * Ackermann linkage's mechanical advantage genuinely varies nonlinearly
+ * (matches WHEELTEC's own reference cubic's underlying idea - see commit
+ * b8ed0a6 - just refit to THIS chassis's real measured points instead of
+ * reusing their coefficients, which were already shown wrong here by
+ * commit 4829d88). Tried, not deleted: while verifying it against a
+ * protractor, the -29.5deg/2400us anchor point ITSELF measured as 33deg,
+ * not 29.5 - meaning the foundation this curve was built on needs
+ * re-measuring before the curve is worth trusting, not just the shape
+ * between the known points. Parked in favor of the simple, already-working
+ * straight-line model below until that's sorted out (and until it's
+ * actually needed - current use case is closed-loop line following, which
+ * self-corrects against imperfect calibration far more than an open-loop
+ * maneuver would).
  *
- * Built as a cubic Hermite spline through the SAME THREE REAL MEASURED
- * POINTS already used elsewhere in this file (840/1490/2400us) - not an
- * independently invented curve. A cubic has 4 degrees of freedom; 3 points
- * constrain 3, leaving exactly one free choice, resolved as follows:
- *   - Slope AT CENTER is set equal to the LEFT side's own straight-line
- *     slope (SERVO_US_PER_RAD_LEFT). This is what makes the curve SMOOTH
- *     (continuous derivative) through center rather than having a kink
- *     there - a kink at center would imply an actual mechanical
- *     discontinuity in the linkage, which isn't physically plausible.
- *   - Slope AT THE RIGHT LIMIT is set so the two Hermite endpoint slopes
- *     average to exactly the segment's real measured average slope
- *     (SERVO_US_PER_RAD_RIGHT), i.e. m0 + m1 = 2 * avg. This is the
- *     simplest reasonable way to distribute curvature given only 3 known
- *     points - it produces a limit-end slope ~2.3x steeper than center and
- *     ~1.4x steeper than the old straight-line average, matching the
- *     flattening actually observed. The EXACT curvature distribution
- *     between center and the limit is still unverified pending real
- *     intermediate protractor readings (servo_cal_measure(), selftest.c) -
- *     this is an informed estimate of the curve's SHAPE from one qualitative
- *     observation, not a fitted measurement of it.
- *
- * LEFT side is left as a straight line - no comparable flattening was
- * observed/reported there, so no comparable assumption is made for it. */
 #define SERVO_RIGHT_HERMITE_M0_US_PER_RAD SERVO_US_PER_RAD_LEFT
 #define SERVO_RIGHT_HERMITE_M1_US_PER_RAD \
     (2.0f * SERVO_US_PER_RAD_RIGHT - SERVO_US_PER_RAD_LEFT)
@@ -189,11 +170,11 @@ void servo_init(void)
 static float servo_right_hermite_pulse_us(float angle_rad)
 {
     const float right_limit_rad = -SERVO_CAL_RIGHT_ANGLE_DEG * SERVO_DEG_TO_RAD;
-    const float t = angle_rad / right_limit_rad; /* 0 at center, 1 at the limit */
+    const float t = angle_rad / right_limit_rad; // 0 at center, 1 at the limit
     const float t2 = t * t;
     const float t3 = t2 * t;
 
-    /* Standard cubic Hermite basis functions. */
+    // Standard cubic Hermite basis functions.
     const float h00 = 2.0f * t3 - 3.0f * t2 + 1.0f;
     const float h10 = t3 - 2.0f * t2 + t;
     const float h01 = -2.0f * t3 + 3.0f * t2;
@@ -204,19 +185,23 @@ static float servo_right_hermite_pulse_us(float angle_rad)
          + h01 * SERVO_CAL_RIGHT_PULSE_US
          + h11 * right_limit_rad * SERVO_RIGHT_HERMITE_M1_US_PER_RAD;
 }
+*/
 
 /* Shared conversion, used by both the clamped and raw entry points below.
- * Left side: linear interpolation between the measured endpoints, see the
- * REAL-ANGLE -> PULSE MAPPING block above. Right side: cubic Hermite, see
- * servo_right_hermite_pulse_us() above. Bounded only by
- * SERVO_CAL_PULSE_MIN/MAX_US, the absolute safety envelope; the per-side
- * angle clamp in servo_set_angle() is what enforces the measured operating
- * limits. */
+ * Per-side linear interpolation between the measured endpoints - see the
+ * REAL-ANGLE -> PULSE MAPPING block above for provenance and limitations.
+ *
+ * The slope is selected by the sign of the requested angle, so the two sides
+ * are independent: the same magnitude of angle produces a different pulse
+ * offset left vs. right (~660us at full left, ~900us at full right). Bounded
+ * only by SERVO_CAL_PULSE_MIN/MAX_US, the absolute safety envelope; the
+ * per-side angle clamp in servo_set_angle() is what enforces the measured
+ * operating limits. */
 static void servo_write_angle_unclamped(float angle_rad)
 {
-    float pulse_us = (angle_rad >= 0.0f)
-        ? (float)SERVO_PULSE_CENTER_US + angle_rad * SERVO_US_PER_RAD_LEFT
-        : servo_right_hermite_pulse_us(angle_rad);
+    const float us_per_rad = (angle_rad >= 0.0f) ? SERVO_US_PER_RAD_LEFT
+                                                 : SERVO_US_PER_RAD_RIGHT;
+    float pulse_us = (float)SERVO_PULSE_CENTER_US + angle_rad * us_per_rad;
 
     if (pulse_us < (float)SERVO_CAL_PULSE_MIN_US) pulse_us = (float)SERVO_CAL_PULSE_MIN_US;
     if (pulse_us > (float)SERVO_CAL_PULSE_MAX_US) pulse_us = (float)SERVO_CAL_PULSE_MAX_US;

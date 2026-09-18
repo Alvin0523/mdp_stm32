@@ -606,10 +606,13 @@ static void servo_cal_center_trim(void)
  * calibration tools, so the full measured range is reachable) and shows
  * both the commanded angle and the resulting PWM. Lets a protractor
  * reading at the wheel be checked directly against what the model predicts
- * for that angle - straight line on the left, cubic Hermite on the right
- * (see servo.c's servo_write_angle_unclamped()/servo_right_hermite_pulse_us()).
- * No timeout - hold each angle as long as needed to read the protractor,
- * PE0 for next step. */
+ * for that angle - currently a straight line on BOTH sides
+ * (servo.c's servo_write_angle_unclamped()). A cubic Hermite curve for the
+ * right side was tried and parked there (commented out, not deleted) after
+ * a protractor check found the 2400us anchor point itself measuring 33deg
+ * instead of the assumed 29.5deg - re-enable once that's re-measured and
+ * resolved. No timeout - hold each angle as long as needed to read the
+ * protractor, PE0 for next step. */
 #define SELFTEST_VERIFY_ANGLE_START_DEG (-29.5f)
 #define SELFTEST_VERIFY_ANGLE_END_DEG     35.0f
 #define SELFTEST_VERIFY_ANGLE_STEP_DEG     5.0f

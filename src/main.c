@@ -232,6 +232,29 @@ int main(void)
                     break;
                 }
 
+                case 2:
+                    /* Page 3: raw gyro (deg/s), all three axes - see
+                     * imu.c/oled.c for how bias-corrected-but-unfiltered
+                     * this actually is. */
+                    oled_render_page3(g_imu_data.gyro_x, g_imu_data.gyro_y, g_imu_data.gyro_z);
+                    break;
+
+                case 3:
+                    /* Page 4: raw accel (m/s^2), all three axes - zero
+                     * calibration applied, see oled_render_page4()'s
+                     * comment for what to expect at rest. */
+                    oled_render_page4(g_imu_data.accel_x, g_imu_data.accel_y, g_imu_data.accel_z);
+                    break;
+
+                case 4:
+                    /* Page 5: steering - PWM actually being sent right now
+                     * (read back from the timer register, not just the
+                     * last commanded value), the calibrated center for
+                     * comparison, and the commanded angle. */
+                    oled_render_page5(servo_get_pulse_us(), servo_pulse_center_us(),
+                                       steer_rad * (180.0f / 3.14159265f));
+                    break;
+
                 default:
                     g_oled_page = 0;
                     break;

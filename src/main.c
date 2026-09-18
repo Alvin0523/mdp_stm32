@@ -217,22 +217,19 @@ int main(void)
                     break;
 
                 case 1: {
-                    /* Page 2: Distance Sensors (Ultrasonic & IR). Ultrasonic
-                     * is a real HC-SR04 reading now (ultrasonic.c, ported
-                     * from the songli branch) - -1 means no valid echo yet
-                     * (disabled, out of range, or stale >300ms), rendered
-                     * as "--" rather than a stale/fake number. */
+                    /* Page 2: Distance Sensors (Ultrasonic & IR) + Encoders.
+                     * Ultrasonic is a real HC-SR04 reading now (ultrasonic.c,
+                     * ported from the songli branch) - -1 means no valid
+                     * echo yet (disabled, out of range, or stale >300ms),
+                     * rendered as "--" rather than a stale/fake number.
+                     * Encoder counts merged in from the old page 3 - uptime
+                     * dropped, nobody was actually checking it here. */
                     float ultrasonic_cm = -1.0f;
                     (void)ultrasonic_get_distance_cm(&ultrasonic_cm);
-                    oled_render_page2(ultrasonic_cm, ir_distance_cm);
+                    oled_render_page2(ultrasonic_cm, ir_distance_cm,
+                                       encoder_get_count_a(), encoder_get_count_b());
                     break;
                 }
-
-                case 2:
-                    /* Page 3: Hardware Diagnostics (ESTOP moved to page 1) */
-                    oled_render_page3(encoder_get_count_a(),
-                                       encoder_get_count_b(), HAL_GetTick() / 1000U);
-                    break;
 
                 default:
                     g_oled_page = 0;

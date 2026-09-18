@@ -201,8 +201,13 @@ void oled_render_page1(float battery_v, uint8_t estop_state, float left_speed, f
      * overwrites glyph cells for the new string's own length, so a shorter
      * string here would leave a stray glyph from the previous longer one
      * (this is what caused "9.9VV" - the trailing V from "10.0V" never got
-     * erased when the value dropped to one digit). */
-    snprintf(buf, sizeof(buf), "SYS:OK %4.1fV", battery_v);
+     * erased when the value dropped to one digit).
+     *
+     * Was "SYS:OK ..." before - that label was hardcoded, never actually
+     * reflecting any real check (would still say "OK" even if the IMU
+     * failed to init). Just labels the number now instead of pretending
+     * to be a status check it isn't. */
+    snprintf(buf, sizeof(buf), "BATT: %4.1fV", battery_v);
     oled_show_string_8x16_offset(0, 12, buf);
 
     /* Same fixed-width reasoning: "ENGAGED" (7 chars) and "READY" both need
@@ -221,44 +226,39 @@ void oled_render_page1(float battery_v, uint8_t estop_state, float left_speed, f
     oled_show_string_8x16_offset(3, 12, buf);
 }
 
-void oled_render_page2(float us_cm, float ir_cm)
+void oled_render_page2(float us_cm, float ir_cm, int32_t enc_left, int32_t enc_right)
 {
     char buf[16];
+    char numbuf[8];
 
-    oled_show_string_8x16_offset(0, 12, "== DISTANCE =");
+    oled_show_string_8x16_offset(0, 12, "==SENSORS====");
 
+    /* Same fixed-width fix as page 1's battery/ESTOP lines: format the
+     * number into a constant-width field first (5 chars either way) so
+     * "--" doesn't leave stray glyphs behind from a previous longer
+     * reading. */
     if (us_cm >= 0.0f) {
-        snprintf(buf, sizeof(buf), "Ultra:%5.1fcm", us_cm);
+        snprintf(numbuf, sizeof(numbuf), "%5.1f", (double)us_cm);
     } else {
-        snprintf(buf, sizeof(buf), "Ultra: --");
+        snprintf(numbuf, sizeof(numbuf), "  -- ");
     }
+    snprintf(buf, sizeof(buf), "Ultra:%scm", numbuf);
     oled_show_string_8x16_offset(1, 12, buf);
 
     /* Only one physical IR sensor is wired (ir_sensor.c), despite
      * docs/hardware.md listing two - shown once, in cm only, rather than
      * the raw ADC count and volts it used to also print alongside it. */
-    snprintf(buf, sizeof(buf), "IR:   %5.1fcm", ir_cm);
-    oled_show_string_8x16_offset(2, 12, buf);
-}
-
-void oled_render_page3(int32_t enc_left, int32_t enc_right, uint32_t uptime_sec)
-{
-    char buf[16];
-
-    oled_show_string_8x16_offset(0, 12, "== DIAG =====");
-
-    snprintf(buf, sizeof(buf), "Enc L: %ld", enc_left);
-    oled_show_string_8x16_offset(1, 12, buf);
-
-    snprintf(buf, sizeof(buf), "Enc R: %ld", enc_right);
+    snprintf(buf, sizeof(buf), "IR:   %5.1fcm", (double)ir_cm);
     oled_show_string_8x16_offset(2, 12, buf);
 
-    snprintf(buf, sizeof(buf), "Uptime: %02ld:%02ld", uptime_sec / 60, uptime_sec % 60);
+    /* Encoder counts merged in here (was a separate page) - uptime dropped,
+     * it wasn't something anyone was actually checking on this screen. */
+    snprintf(buf, sizeof(buf), "L:%5ld R:%5ld", (long)enc_left, (long)enc_right);
     oled_show_string_8x16_offset(3, 12, buf);
 }
 
 void oled_next_page(void)
 {
-    g_oled_page = (g_oled_page + 1) % 3; /* Loop through 3 pages */
+    g_oled_page = (g_oled_page + 1) % 2; /* Loop through 2 pages */
     oled_clear();
 }

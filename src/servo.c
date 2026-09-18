@@ -147,6 +147,46 @@ void servo_init(void)
     HAL_TIM_PWM_Start(&s_htim12, TIM_CHANNEL_2);
 }
 
+/* PARKED FOR LATER REVIEW - "the WHEELTEC way": a right-side cubic Hermite
+ * spline, curved instead of a straight line, on the theory that a rigid
+ * Ackermann linkage's mechanical advantage genuinely varies nonlinearly
+ * (matches WHEELTEC's own reference cubic's underlying idea - see commit
+ * b8ed0a6 - just refit to THIS chassis's real measured points instead of
+ * reusing their coefficients, which were already shown wrong here by
+ * commit 4829d88). Tried, not deleted: while verifying it against a
+ * protractor, the -29.5deg/2400us anchor point ITSELF measured as 33deg,
+ * not 29.5 - meaning the foundation this curve was built on needs
+ * re-measuring before the curve is worth trusting, not just the shape
+ * between the known points. Parked in favor of the simple, already-working
+ * straight-line model below until that's sorted out (and until it's
+ * actually needed - current use case is closed-loop line following, which
+ * self-corrects against imperfect calibration far more than an open-loop
+ * maneuver would).
+ *
+#define SERVO_RIGHT_HERMITE_M0_US_PER_RAD SERVO_US_PER_RAD_LEFT
+#define SERVO_RIGHT_HERMITE_M1_US_PER_RAD \
+    (2.0f * SERVO_US_PER_RAD_RIGHT - SERVO_US_PER_RAD_LEFT)
+
+static float servo_right_hermite_pulse_us(float angle_rad)
+{
+    const float right_limit_rad = -SERVO_CAL_RIGHT_ANGLE_DEG * SERVO_DEG_TO_RAD;
+    const float t = angle_rad / right_limit_rad; // 0 at center, 1 at the limit
+    const float t2 = t * t;
+    const float t3 = t2 * t;
+
+    // Standard cubic Hermite basis functions.
+    const float h00 = 2.0f * t3 - 3.0f * t2 + 1.0f;
+    const float h10 = t3 - 2.0f * t2 + t;
+    const float h01 = -2.0f * t3 + 3.0f * t2;
+    const float h11 = t3 - t2;
+
+    return h00 * (float)SERVO_PULSE_CENTER_US
+         + h10 * right_limit_rad * SERVO_RIGHT_HERMITE_M0_US_PER_RAD
+         + h01 * SERVO_CAL_RIGHT_PULSE_US
+         + h11 * right_limit_rad * SERVO_RIGHT_HERMITE_M1_US_PER_RAD;
+}
+*/
+
 /* Shared conversion, used by both the clamped and raw entry points below.
  * Per-side linear interpolation between the measured endpoints - see the
  * REAL-ANGLE -> PULSE MAPPING block above for provenance and limitations.

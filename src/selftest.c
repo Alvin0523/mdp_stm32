@@ -254,22 +254,22 @@ static void servo_sweep(void)
 
 /* --- Center trim: find the pulse width that actually rolls straight ---
  *
- * 1500us is the nominal mechanical center but has never been verified. With
- * the motors off and the car pushed by hand it curves RIGHT, which isolates
- * the fault to steering geometry - no motor or PID contribution is possible
- * in that test. Curving right means true straight-ahead sits at a SHORTER
- * pulse than 1500 (shorter = left on this unit, per the measured endpoints:
- * 840us at +35deg left, 2400us at -29.5deg right), so this sweeps downward.
+ * 1500us is the nominal mechanical center but has never been verified.
+ * Direction flipped from the original assumption here: this unit's hand-push
+ * test at 1500us curves LEFT (not right, as first assumed) - decreasing the
+ * pulse moves further left (confirmed sign convention: shorter pulse = left,
+ * per the measured endpoints: 840us at +35deg left, 2400us at -29.5deg
+ * right), so correcting a left curve means sweeping UPWARD instead.
  *
- * 5us steps are ~0.27deg of real wheel angle each (left-side resolution is
- * 0.053deg/us), fine enough to land on straight without being tedious. If the
- * whole range is exhausted while it still curves right, lower
- * SELFTEST_TRIM_END_US further.
+ * 5us steps are ~0.19deg of real wheel angle each on this side (right-side
+ * resolution is 0.038deg/us, per SERVO_US_PER_RAD_RIGHT), fine enough to
+ * land on straight without being tedious. If the whole range is exhausted
+ * while it still curves left, raise SELFTEST_TRIM_END_US further.
  *
  * Each step is HELD indefinitely - no timeout, no auto-recenter - so the car
  * can be pushed repeatedly at one setting and power cut at the good one. */
 #define SELFTEST_TRIM_START_US 1500U
-#define SELFTEST_TRIM_END_US   1430U
+#define SELFTEST_TRIM_END_US   1570U
 #define SELFTEST_TRIM_STEP_US     5U
 
 /* --- Phase A: mechanical limit finding, one side at a time ---
@@ -463,6 +463,113 @@ static void servo_cal_measure(void)
  * reset the board to get out. That is the intended way to use it (cut power
  * at the step you want), but it does mean the robot is parked in calibration
  * mode until reset. */
+/* Two-window fine step-through, PWM only, no timeout. The coarse 20us
+ * full-range pass found something interesting around 890us (left) and
+ * 2450us (right) - narrowed to just those two windows at 10us resolution
+ * instead of walking the whole 790-2450us span again. One PE0 press per
+ * step, OLED shows raw pulse + which window. Left window finishes, then
+ * continues straight into the right window (no separate restart needed) -
+ * holds indefinitely at the very end like servo_cal_center_trim(), cut
+ * power to exit. */
+#define SELFTEST_FULLRANGE_LEFT_START_US   840U
+#define SELFTEST_FULLRANGE_LEFT_END_US     950U
+#define SELFTEST_FULLRANGE_RIGHT_START_US 2300U
+#define SELFTEST_FULLRANGE_RIGHT_END_US   2500U
+#define SELFTEST_FULLRANGE_STEP_US          10U
+
+static void servo_cal_full_range_window(uint16_t start_us, uint16_t end_us,
+                                         uint16_t step_us, const char *label)
+{
+    char buf[20];
+    int32_t pulse = (int32_t)start_us;
+
+    oled_clear();
+    oled_show_string_8x16_offset(0, 0, label);
+    oled_show_string_8x16_offset(3, 0, "PE0=next step");
+
+    for (;;) {
+        servo_set_pulse_us((uint16_t)pulse);
+
+        snprintf(buf, sizeof(buf), "PULSE %4u us", (unsigned)servo_get_pulse_us());
+        oled_show_string_8x16_offset(1, 0, buf);
+
+        /* No timeout - hold this position until the button is pressed. */
+        (void)wait_for_button_press(0xFFFFFFFFU);
+
+        if (pulse + (int32_t)step_us > (int32_t)end_us) {
+            return; /* window done, caller moves on (or holds, if last) */
+        }
+        pulse += (int32_t)step_us;
+    }
+}
+
+/* Smooth automatic sweep, no button presses - center -> 900 -> 2500, 1us
+ * steps. "20us/sec" requested -> 1us every 1000/20 = 50ms. OLED redraw is
+ * throttled to every 4th step (~200ms) rather than every single 1us step
+ * (~20Hz) - the bit-banged display write has its own overhead, and the
+ * physical smoothness comes from the PWM step rate, not how often the
+ * number on screen refreshes. */
+#define SELFTEST_SMOOTH_STEP_US        1U
+#define SELFTEST_SMOOTH_STEP_DELAY_MS 50U /* 1us / 50ms = 20us/sec */
+#define SELFTEST_SMOOTH_OLED_EVERY_N   4U /* redraw every 4th step (~200ms) */
+
+static void servo_cal_smooth_sweep_to(int32_t *pulse, int32_t target_us)
+{
+    char buf[20];
+    const int32_t step = (target_us >= *pulse) ? (int32_t)SELFTEST_SMOOTH_STEP_US
+                                                : -(int32_t)SELFTEST_SMOOTH_STEP_US;
+    uint32_t n = 0;
+
+    while (*pulse != target_us) {
+        *pulse += step;
+        servo_set_pulse_us((uint16_t)*pulse);
+        HAL_Delay(SELFTEST_SMOOTH_STEP_DELAY_MS);
+
+        if ((n++ % SELFTEST_SMOOTH_OLED_EVERY_N) == 0) {
+            snprintf(buf, sizeof(buf), "PULSE %4u us", (unsigned)servo_get_pulse_us());
+            oled_show_string_8x16_offset(1, 0, buf);
+        }
+    }
+    /* Always show the true final value, even if it landed mid-throttle. */
+    snprintf(buf, sizeof(buf), "PULSE %4u us", (unsigned)servo_get_pulse_us());
+    oled_show_string_8x16_offset(1, 0, buf);
+}
+
+static void servo_cal_smooth_sweep(void)
+{
+    int32_t pulse = (int32_t)servo_pulse_center_us();
+
+    oled_clear();
+    oled_show_string_8x16_offset(0, 0, "SMOOTH SWEEP");
+
+    oled_show_string_8x16_offset(3, 0, "CTR -> 900");
+    servo_cal_smooth_sweep_to(&pulse, 900);
+    HAL_Delay(500); /* brief pause at the turnaround point */
+
+    oled_show_string_8x16_offset(3, 0, "900 -> 2500");
+    servo_cal_smooth_sweep_to(&pulse, 2500);
+
+    oled_show_string_8x16_offset(2, 0, "DONE - HOLDING");
+    for (;;) {
+        HAL_Delay(1000);
+    }
+}
+
+static void servo_cal_full_range(void)
+{
+    servo_cal_full_range_window(SELFTEST_FULLRANGE_LEFT_START_US, SELFTEST_FULLRANGE_LEFT_END_US,
+                                 SELFTEST_FULLRANGE_STEP_US, "LEFT 840-950");
+    servo_cal_full_range_window(SELFTEST_FULLRANGE_RIGHT_START_US, SELFTEST_FULLRANGE_RIGHT_END_US,
+                                 SELFTEST_FULLRANGE_STEP_US, "RIGHT 2300-2500");
+
+    /* Both windows done - hold at the last right-side value forever rather
+     * than silently returning to the caller and re-centering. */
+    oled_show_string_8x16_offset(2, 0, "BOTH DONE-HOLD");
+    for (;;) {
+        (void)wait_for_button_press(0xFFFFFFFFU);
+    }
+}
+
 static void servo_cal_center_trim(void)
 {
     char buf[20];
@@ -470,7 +577,7 @@ static void servo_cal_center_trim(void)
 
     oled_clear();
     oled_show_string_8x16_offset(0, 0, "CENTER TRIM");
-    oled_show_string_8x16_offset(3, 0, "PE0=-5us PUSH");
+    oled_show_string_8x16_offset(3, 0, "PE0=+5us PUSH");
 
     for (;;) {
         servo_set_pulse_us((uint16_t)pulse);
@@ -484,12 +591,56 @@ static void servo_cal_center_trim(void)
         /* No timeout - hold this position until the button is pressed. */
         (void)wait_for_button_press(0xFFFFFFFFU);
 
-        if (pulse - (int32_t)SELFTEST_TRIM_STEP_US >= (int32_t)SELFTEST_TRIM_END_US) {
-            pulse -= (int32_t)SELFTEST_TRIM_STEP_US;
+        if (pulse + (int32_t)SELFTEST_TRIM_STEP_US <= (int32_t)SELFTEST_TRIM_END_US) {
+            pulse += (int32_t)SELFTEST_TRIM_STEP_US;
         } else {
-            /* Bottom of the range and still curving right - hold here rather
-             * than wrapping or recentering, and widen SELFTEST_TRIM_END_US. */
-            oled_show_string_8x16_offset(3, 0, "END-LOWER RANGE");
+            /* Top of the range and still curving left - hold here rather
+             * than wrapping or recentering, and raise SELFTEST_TRIM_END_US. */
+            oled_show_string_8x16_offset(3, 0, "END-RAISE RANGE");
+        }
+    }
+}
+
+/* Angle-driven verify sweep: commands a REAL ANGLE (not a raw pulse) via
+ * servo_set_angle_raw() (bypasses the operating clamp, same as the other
+ * calibration tools, so the full measured range is reachable) and shows
+ * both the commanded angle and the resulting PWM. Lets a protractor
+ * reading at the wheel be checked directly against what the model predicts
+ * for that angle - currently a straight line on BOTH sides
+ * (servo.c's servo_write_angle_unclamped()). A cubic Hermite curve for the
+ * right side was tried and parked there (commented out, not deleted) after
+ * a protractor check found the 2400us anchor point itself measuring 33deg
+ * instead of the assumed 29.5deg - re-enable once that's re-measured and
+ * resolved. No timeout - hold each angle as long as needed to read the
+ * protractor, PE0 for next step. */
+#define SELFTEST_VERIFY_ANGLE_START_DEG (-29.5f)
+#define SELFTEST_VERIFY_ANGLE_END_DEG     35.0f
+#define SELFTEST_VERIFY_ANGLE_STEP_DEG     5.0f
+
+static void servo_cal_verify_curve(void)
+{
+    char buf[20];
+    float angle_deg = SELFTEST_VERIFY_ANGLE_START_DEG;
+
+    oled_clear();
+    oled_show_string_8x16_offset(0, 0, "VERIFY CURVE");
+    oled_show_string_8x16_offset(3, 0, "PE0=next step");
+
+    for (;;) {
+        servo_set_angle_raw(angle_deg * (3.14159265f / 180.0f));
+
+        snprintf(buf, sizeof(buf), "ANGLE %+5.1f deg", (double)angle_deg);
+        oled_show_string_8x16_offset(1, 0, buf);
+        snprintf(buf, sizeof(buf), "PWM   %4u us", (unsigned)servo_get_pulse_us());
+        oled_show_string_8x16_offset(2, 0, buf);
+
+        /* No timeout - hold this angle until the button is pressed. */
+        (void)wait_for_button_press(0xFFFFFFFFU);
+
+        if (angle_deg + SELFTEST_VERIFY_ANGLE_STEP_DEG <= SELFTEST_VERIFY_ANGLE_END_DEG) {
+            angle_deg += SELFTEST_VERIFY_ANGLE_STEP_DEG;
+        } else {
+            oled_show_string_8x16_offset(3, 0, "END - HOLDING");
         }
     }
 }
@@ -678,45 +829,52 @@ void selftest_run(void)
     oled_clear();
     oled_show_string_8x16_offset(0, 0, "SELF-TEST MODE");
 
-    /* Phase 1 - forward 1 wheel revolution. Motor + encoder check, both
-     * sides, open-loop (PID stays paused - see drive_ticks()). */
-    blink_pe8(1, 150, 150);
-    oled_show_string_8x16_offset(1, 0, "1: FWD 1 REV");
-    drive_ticks(SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
+    /* Phases 1-4 (mini component test: fwd/rev 1 rev, servo sweep,
+     * straight-line PID drive) disabled while center-trim recalibration is
+     * in progress, so a plain PE0 click goes straight to the trim tool
+     * instead of sitting through ~15s of driving first. Re-enable
+     * (uncomment) once a new center value is found and set - see the git
+     * history for the original phase 1-4 block if restoring from scratch.
+     *
+     * blink_pe8(1, 150, 150);
+     * oled_show_string_8x16_offset(1, 0, "1: FWD 1 REV");
+     * drive_ticks(SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
+     *
+     * blink_pe8(2, 150, 150);
+     * oled_show_string_8x16_offset(1, 0, "2: REV 1 REV");
+     * drive_ticks(-SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
+     *
+     * blink_pe8(3, 150, 150);
+     * oled_show_string_8x16_offset(1, 0, "3: SERVO SWEEP");
+     * servo_sweep();
+     *
+     * blink_pe8(4, 150, 150);
+     * servo_straight_line_pid();
+     */
 
-    /* Phase 2 - same, in reverse. */
+    /* Phase 5 - verify curve against a protractor. Commands real angles
+     * (not raw pulses) in 5deg steps across the full range, showing both
+     * the commanded angle and the resulting PWM - hold each step to check
+     * the wheel's actual angle with a protractor against what's displayed.
+     * Tests the new cubic Hermite mapping on the right side (servo.c)
+     * against real measurements. Disable again (comment out) once done. */
     blink_pe8(2, 150, 150);
-    oled_show_string_8x16_offset(1, 0, "2: REV 1 REV");
-    drive_ticks(-SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
-
-    /* Phase 3 - servo to both calibrated extremes and back. Confirms the
-     * servo can actually reach SERVO_ANGLE_MAX_LEFT/RIGHT_RAD (servo.h)
-     * without stalling - those limits are hardware-measured and final now,
-     * not under question the way they were during calibration. */
-    blink_pe8(3, 150, 150);
-    oled_show_string_8x16_offset(1, 0, "3: SERVO SWEEP");
-    servo_sweep();
-
-    /* Phase 4 - straight line through the real PID loop, steering centered
-     * at the measured 1490us. End-to-end check: motors, encoders, PID, and
-     * steering center all working together, not just individually. */
-    blink_pe8(4, 150, 150);
-    servo_straight_line_pid();
+    servo_cal_verify_curve();
 
     /* ------------------------------------------------------------------
-     * Steering-calibration tooling below is intentionally NOT part of the
-     * routine sequence above - re-enable individual calls here only when
-     * actually re-calibrating, see the RAW-PULSE CALIBRATION block and its
-     * functions' own doc comments further up this file.
+     * Remaining steering-calibration tooling below is intentionally NOT
+     * part of the routine sequence above - re-enable individual calls here
+     * only when actually re-calibrating, see the RAW-PULSE CALIBRATION
+     * block and its functions' own doc comments further up this file.
      *
      * blink_pe8(2, 150, 150);
      * servo_cal_center_trim();      // holds indefinitely, never returns
      *
      * blink_pe8(2, 150, 150);
-     * servo_cal_verify_points();
+     * servo_cal_right_limit();      // sweeps 2380-2500us, 30s/step timeout
      *
      * blink_pe8(2, 150, 150);
-     * servo_cal_right_limit();      // sweeps 2380-2500us
+     * servo_cal_verify_points();
      *
      * servo_cal_left_limit();
      *

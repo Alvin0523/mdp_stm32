@@ -678,34 +678,32 @@ void selftest_run(void)
     oled_clear();
     oled_show_string_8x16_offset(0, 0, "SELF-TEST MODE");
 
-    /* Phase 1 - forward 1 wheel revolution. Motor + encoder check, both
-     * sides, open-loop (PID stays paused - see drive_ticks()). */
-    blink_pe8(1, 150, 150);
-    oled_show_string_8x16_offset(1, 0, "1: FWD 1 REV");
-    drive_ticks(SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
-
-    /* Phase 2 - same, in reverse. */
-    blink_pe8(2, 150, 150);
-    oled_show_string_8x16_offset(1, 0, "2: REV 1 REV");
-    drive_ticks(-SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
-
-    /* Phase 3 - servo to both calibrated extremes and back. Confirms the
-     * servo can actually reach SERVO_ANGLE_MAX_LEFT/RIGHT_RAD (servo.h)
-     * without stalling - those limits are hardware-measured and final now,
-     * not under question the way they were during calibration. */
-    blink_pe8(3, 150, 150);
-    oled_show_string_8x16_offset(1, 0, "3: SERVO SWEEP");
-    servo_sweep();
-
-    /* Phase 4 - straight line through the real PID loop, steering centered
-     * at the measured 1490us. End-to-end check: motors, encoders, PID, and
-     * steering center all working together, not just individually. */
-    blink_pe8(4, 150, 150);
-    servo_straight_line_pid();
+    /* Phases 1-4 (mini component test: fwd/rev 1 rev, servo sweep,
+     * straight-line PID drive) disabled while center-trim recalibration is
+     * in progress, so a plain PE0 click goes straight to the trim tool
+     * instead of sitting through ~15s of driving first. Re-enable
+     * (uncomment) once a new center value is found and set - see the git
+     * history for the original phase 1-4 block if restoring from scratch.
+     *
+     * blink_pe8(1, 150, 150);
+     * oled_show_string_8x16_offset(1, 0, "1: FWD 1 REV");
+     * drive_ticks(SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
+     *
+     * blink_pe8(2, 150, 150);
+     * oled_show_string_8x16_offset(1, 0, "2: REV 1 REV");
+     * drive_ticks(-SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
+     *
+     * blink_pe8(3, 150, 150);
+     * oled_show_string_8x16_offset(1, 0, "3: SERVO SWEEP");
+     * servo_sweep();
+     *
+     * blink_pe8(4, 150, 150);
+     * servo_straight_line_pid();
+     */
 
     /* Phase 5 - center trim re-calibration. Re-enabled on request (steering
      * curves right under real driving load, static push-test center may not
-     * hold up loaded). Runs after the mini-test phases above, then HOLDS
+     * hold up loaded). Now the ONLY thing a PE0 click runs - holds
      * INDEFINITELY - see servo_cal_center_trim()'s own doc comment. Disable
      * again (comment out) once a new center value is found and set in
      * SERVO_PULSE_CENTER_US (servo.h). */

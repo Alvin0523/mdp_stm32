@@ -703,14 +703,20 @@ void selftest_run(void)
     blink_pe8(4, 150, 150);
     servo_straight_line_pid();
 
+    /* Phase 5 - center trim re-calibration. Re-enabled on request (steering
+     * curves right under real driving load, static push-test center may not
+     * hold up loaded). Runs after the mini-test phases above, then HOLDS
+     * INDEFINITELY - see servo_cal_center_trim()'s own doc comment. Disable
+     * again (comment out) once a new center value is found and set in
+     * SERVO_PULSE_CENTER_US (servo.h). */
+    blink_pe8(2, 150, 150);
+    servo_cal_center_trim();      // holds indefinitely, never returns
+
     /* ------------------------------------------------------------------
-     * Steering-calibration tooling below is intentionally NOT part of the
-     * routine sequence above - re-enable individual calls here only when
-     * actually re-calibrating, see the RAW-PULSE CALIBRATION block and its
-     * functions' own doc comments further up this file.
-     *
-     * blink_pe8(2, 150, 150);
-     * servo_cal_center_trim();      // holds indefinitely, never returns
+     * Remaining steering-calibration tooling below is intentionally NOT
+     * part of the routine sequence above - re-enable individual calls here
+     * only when actually re-calibrating, see the RAW-PULSE CALIBRATION
+     * block and its functions' own doc comments further up this file.
      *
      * blink_pe8(2, 150, 150);
      * servo_cal_verify_points();

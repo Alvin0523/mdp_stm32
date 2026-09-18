@@ -227,12 +227,23 @@ void oled_render_page1(float battery_v, uint8_t estop_state, float left_speed, f
     snprintf(buf, sizeof(buf), "ESTOP: %-7s", estop_state ? "ENGAGED" : "READY");
     oled_show_string_8x16_offset(1, 12, buf);
 
-    snprintf(buf, sizeof(buf), "L:%.2f  R:%.2f", left_speed, right_speed);
+    /* Display is 128px wide, this row starts at x=12, so there's only
+     * 116px = 14.5 chars of room - oled_set_pos()/oled_write_byte() never
+     * bounds-check x, so writing past column 127 wraps onto the next
+     * page instead of erroring. "%.2f" with no width was unbounded and
+     * already overflowed by 12px even at everyday values (e.g.
+     * "L:12.34  R:12.34" = 16 chars = 128px, right at the edge with zero
+     * margin) - %4.1f fixes both the width AND drops to a fixed field so
+     * it can't grow past this budget. */
+    snprintf(buf, sizeof(buf), "L:%4.1f R:%4.1f", (double)left_speed, (double)right_speed);
     oled_show_string_8x16_offset(2, 12, buf);
 
     /* Y = yaw, degrees - this board's own raw gyro-integrated estimate
-     * (imu.c), not the Pi-side EKF's fused /odometry/filtered heading. */
-    snprintf(buf, sizeof(buf), "STR:%+3.0f  Y:%+3.0f", steer_deg, yaw_deg);
+     * (imu.c), not the Pi-side EKF's fused /odometry/filtered heading.
+     * Same overflow fix as above - steer realistically stays within
+     * width 3 (+/-35 max), yaw needs width 4 to safely hold 3-digit
+     * swings (+180 etc) without exceeding its field. */
+    snprintf(buf, sizeof(buf), "STR:%+3.0f Y:%+4.0f", (double)steer_deg, (double)yaw_deg);
     oled_show_string_8x16_offset(3, 12, buf);
 }
 
@@ -262,8 +273,17 @@ void oled_render_page2(float us_cm, float ir_cm, int32_t enc_left, int32_t enc_r
     oled_show_string_8x16_offset(2, 12, buf);
 
     /* Encoder counts merged in here (was a separate page) - uptime dropped,
-     * it wasn't something anyone was actually checking on this screen. */
-    snprintf(buf, sizeof(buf), "L:%5ld R:%5ld", (long)enc_left, (long)enc_right);
+     * it wasn't something anyone was actually checking on this screen.
+     * "ENC left:right" rather than page 1's "L:.. R:.." style on purpose -
+     * page 1's L/R is wheel SPEED (ticks/sec), this is cumulative tick
+     * COUNT, a different quantity entirely; matching labels across both
+     * would make them look like the same thing at a glance.
+     * Width 5 kept (not 4) since encoder counts can run into 5 digits
+     * over a session, unlike the small values on page 1 - the "R: 0"
+     * overflow was from the old label/spacing overhead, not the value
+     * itself, so tightening ENC's own label recovers that margin instead
+     * of shrinking the numbers' actual range. */
+    snprintf(buf, sizeof(buf), "ENC%5ld:%5ld", (long)enc_left, (long)enc_right);
     oled_show_string_8x16_offset(3, 12, buf);
 }
 

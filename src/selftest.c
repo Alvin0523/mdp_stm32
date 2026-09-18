@@ -701,14 +701,25 @@ void selftest_run(void)
      * servo_straight_line_pid();
      */
 
-    /* Phase 5 - center trim re-calibration. Re-enabled on request (steering
-     * curves right under real driving load, static push-test center may not
-     * hold up loaded). Now the ONLY thing a PE0 click runs - holds
-     * INDEFINITELY - see servo_cal_center_trim()'s own doc comment. Disable
-     * again (comment out) once a new center value is found and set in
-     * SERVO_PULSE_CENTER_US (servo.h). */
+    /* Phase 5 - right steering limit. Paused on center trim to check the
+     * right limit first - left (840us/35deg, chassis contact) is a hard
+     * mechanical stop and already confirmed; right (2400us/29.5deg) was
+     * flagged in servo.h as NOT confirmed - measurement just stopped there,
+     * wheel was still tracking. Sweeps 2380-2500us in 10us steps, one step
+     * per PE0 press, 30s per-step timeout (auto-recenters if you walk away -
+     * unlike center trim, this one does NOT hold forever). Watch/listen for
+     * the step where it stalls (audible buzz/whine, no visible motion) or
+     * hits chassis/linkage contact - stop at the LAST CLEAN step, not the
+     * one that stalled. Disable again once the real limit is found and
+     * SERVO_CAL_RIGHT_ANGLE_DEG/pulse is updated in servo.h.
+     *
+     * blink_pe8(2, 150, 150);
+     * servo_cal_center_trim();      // holds indefinitely, never returns -
+     *                               // paused, not abandoned; re-enable once
+     *                               // the right limit is settled
+     */
     blink_pe8(2, 150, 150);
-    servo_cal_center_trim();      // holds indefinitely, never returns
+    servo_cal_right_limit();      // sweeps 2380-2500us
 
     /* ------------------------------------------------------------------
      * Remaining steering-calibration tooling below is intentionally NOT
@@ -718,9 +729,6 @@ void selftest_run(void)
      *
      * blink_pe8(2, 150, 150);
      * servo_cal_verify_points();
-     *
-     * blink_pe8(2, 150, 150);
-     * servo_cal_right_limit();      // sweeps 2380-2500us
      *
      * servo_cal_left_limit();
      *

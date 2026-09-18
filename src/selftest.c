@@ -21,41 +21,33 @@
  * record, including how the LEFT/RIGHT labels got corrected after the
  * sign convention was pinned down (the sweeps were run before that).
  *
- * CURRENTLY IN RAW-PULSE STEERING CALIBRATION MODE (drive phases and the
- * both-extremes hold disabled; see selftest_run() and the RAW-PULSE
- * CALIBRATION block below):
- *   1 blink  = PHASE 1, straight line via the PID loop, steering centered at
- *              the measured 1490us
- *   2 blinks = CENTER TRIM (disabled - already done, 1490us)
- *   3 blinks = PHASE B, protractor measurement sweep (disabled by default)
- *
- * Every phase advances ONE STEP PER PE0 PRESS and displays the raw pulse
- * width, so measurement is self-paced. Any phase can be skipped by simply
- * not pressing PE0 - it times out and recenters. Watch and listen at every
- * step: the last pulse with clean, unobstructed motion is the real limit.
- * A servo stall is an audible buzz/whine with no visible motion; chassis
- * or linkage contact is the wheel/knuckle visibly binding or scraping
- * while the servo still strains. Stop at the last clean step - not the one
- * that stalled. Releasing the button for SELFTEST_CAL_STEP_TIMEOUT_MS
- * aborts and recenters, so nothing is left stalled unattended.
- *
- * Calibrate in MICROSECONDS, not in the "angle" the servo_set_angle*()
- * functions take - that unit is an input to WHEELTEC's unverified cubic
- * and its 800-2200us clamp is what previously made the right side
- * impossible to measure. Full reasoning at servo.h's servo_set_pulse_us().
- * The older angle-based sweeps (servo_sweep_range()/servo_sweep_left_fine()/
- * servo_sweep_right_fine()) are retained for reference only.
- *
- * NORMAL drive-test sequence (restore by uncommenting drive phases in
- * selftest_run()):
- *   1 blink = forward 1 wheel revolution
- *   2 blinks = backward 1 wheel revolution
- *   3 blinks = servo to LEFT max, hold, then RIGHT max, hold
- *   4 blinks = done
+ * MINI COMPONENT TEST (current default - steering calibration is done, see
+ * servo.h; this is the routine "are the basics still working" sequence,
+ * not a calibration tool). Each phase advances automatically once its own
+ * motion finishes - no button press needed mid-sequence:
+ *   1 blink  = FWD 1 REV  - drives both rear wheels forward one wheel
+ *              revolution open-loop (PID paused), tracking each wheel's own
+ *              encoder independently. Confirms both motors AND both
+ *              encoders respond.
+ *   2 blinks = REV 1 REV  - same, in reverse.
+ *   3 blinks = SERVO SWEEP - steering to the calibrated left max
+ *              (SERVO_ANGLE_MAX_LEFT_RAD), hold, back to center, then the
+ *              calibrated right max (SERVO_ANGLE_MAX_RIGHT_RAD), hold, back
+ *              to center. Confirms the servo can actually reach both
+ *              calibrated limits without stalling.
+ *   4 blinks = STRAIGHT LINE - drives forward through the real PID loop
+ *              (motor_pid, not open-loop) with steering centered at the
+ *              measured 1490us. End-to-end check: motors, encoders, PID,
+ *              and steering center all working together.
+ *   DONE     = 2 quick blinks, motors off, steering re-centered.
  *
  * Refusal (motor switch OFF) is a distinct standalone 5-blink pattern with
- * a different on/off timing (100ms/100ms vs. the phases' 150ms/150ms) -
- * not part of either numbered sequence above.
+ * a different on/off timing (100ms/100ms vs. the phases' 150ms/150ms).
+ *
+ * The steering-calibration tooling used to find the numbers above (raw-pulse
+ * sweeps, center trim, protractor measurement phases) is still in this file
+ * but disabled in selftest_run() - re-enable only to re-calibrate, not for
+ * routine testing. See the RAW-PULSE CALIBRATION block below for that.
  */
 
 #include "selftest.h"
@@ -686,80 +678,54 @@ void selftest_run(void)
     oled_clear();
     oled_show_string_8x16_offset(0, 0, "SELF-TEST MODE");
 
-    /* Phases 1/2 (forward/backward 1 wheel revolution) disabled - right-
-     * side-only servo measurement pass. Commented out, not deleted.
-     *
-     * blink_pe8(1, 150, 150);
-     * oled_show_string_8x16_offset(1, 0, "1: FWD 1 REV");
-     * drive_ticks(SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
-     *
-     * blink_pe8(2, 150, 150);
-     * oled_show_string_8x16_offset(1, 0, "2: REV 1 REV");
-     * drive_ticks(-SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
-     */
-
-    /* The angle-based fine sweeps are superseded by the raw-pulse
-     * calibration phases below and kept only for reference. Do not use them
-     * to find limits: their unit is an input to the unverified cubic, and
-     * their 800-2200us clamp is what made the right side unmeasurable in
-     * the first place (see the RAW-PULSE CALIBRATION block above).
-     *
-     * servo_sweep_left_fine();
-     * servo_sweep_right_fine();
-     */
-
-    /* Routine both-extremes verification hold. Disabled during calibration
-     * because it drives to SERVO_ANGLE_MAX_LEFT/RIGHT_RAD, whose provenance
-     * is exactly what is under question - restore it once the limits below
-     * have been measured and those constants updated.
-     *
-     * blink_pe8(1, 150, 150);
-     * oled_show_string_8x16_offset(1, 0, "1: SERVO SWEEP");
-     * servo_sweep();
-     */
-
-    /* PHASE 1 - straight line through the PID loop. Needs floor space and the
-     * motor switch on. Steering is centered via servo_set_angle(0.0f), which
-     * now resolves to the MEASURED 1490us center rather than the nominal
-     * 1500us that curved right. */
+    /* Phase 1 - forward 1 wheel revolution. Motor + encoder check, both
+     * sides, open-loop (PID stays paused - see drive_ticks()). */
     blink_pe8(1, 150, 150);
+    oled_show_string_8x16_offset(1, 0, "1: FWD 1 REV");
+    drive_ticks(SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
+
+    /* Phase 2 - same, in reverse. */
+    blink_pe8(2, 150, 150);
+    oled_show_string_8x16_offset(1, 0, "2: REV 1 REV");
+    drive_ticks(-SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
+
+    /* Phase 3 - servo to both calibrated extremes and back. Confirms the
+     * servo can actually reach SERVO_ANGLE_MAX_LEFT/RIGHT_RAD (servo.h)
+     * without stalling - those limits are hardware-measured and final now,
+     * not under question the way they were during calibration. */
+    blink_pe8(3, 150, 150);
+    oled_show_string_8x16_offset(1, 0, "3: SERVO SWEEP");
+    servo_sweep();
+
+    /* Phase 4 - straight line through the real PID loop, steering centered
+     * at the measured 1490us. End-to-end check: motors, encoders, PID, and
+     * steering center all working together, not just individually. */
+    blink_pe8(4, 150, 150);
     servo_straight_line_pid();
 
-    /* Center trim - done, 1490us is now SERVO_PULSE_CENTER_US in servo.c.
-     * Re-enable only to re-trim; note it never returns on its own (holds each
-     * step indefinitely so power can be cut at the chosen one).
+    /* ------------------------------------------------------------------
+     * Steering-calibration tooling below is intentionally NOT part of the
+     * routine sequence above - re-enable individual calls here only when
+     * actually re-calibrating, see the RAW-PULSE CALIBRATION block and its
+     * functions' own doc comments further up this file.
      *
      * blink_pe8(2, 150, 150);
-     * servo_cal_center_trim();
-     */
-
-    /* Steering calibration phases - both sides measured already (left 840us
-     * /35.0deg, right 2400us/29.5deg), so they are off by default. Re-enable
-     * servo_cal_verify_points() to re-check those points (measuring BOTH
-     * front wheels this time, per s_servo_cal_points), or
-     * servo_cal_right_limit() to sweep 2380-2500us and see whether the right
-     * side extends past the 2400us currently taken as its limit.
+     * servo_cal_center_trim();      // holds indefinitely, never returns
      *
      * blink_pe8(2, 150, 150);
      * servo_cal_verify_points();
      *
      * blink_pe8(2, 150, 150);
-     * servo_cal_right_limit();
-     */
-
-    /* Left limit found at 840us (35.0deg real, chassis contact) - re-enable
-     * only to re-check that side.
+     * servo_cal_right_limit();      // sweeps 2380-2500us
      *
      * servo_cal_left_limit();
-     */
-
-    /* PHASE B - protractor measurement across the full range. Enable once
-     * both limits are known, after narrowing SELFTEST_CAL_MEASURE_START/END_US
-     * to sit inside them.
      *
      * blink_pe8(3, 150, 150);
-     * servo_cal_measure();
-     */
+     * servo_cal_measure();          // PHASE B, full-range protractor sweep
+     *
+     * servo_sweep_left_fine();      // superseded by raw-pulse calibration -
+     * servo_sweep_right_fine();     // reference only, see block comment above
+     * ------------------------------------------------------------------ */
 
     /* Return to center and finish */
     servo_set_angle(0.0f);

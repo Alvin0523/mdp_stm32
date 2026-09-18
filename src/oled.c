@@ -59,11 +59,11 @@ static const uint8_t g_asc2_1608[95][16] = {
     {0x00,0xF0,0x08,0xB8,0xB8,0xB8,0x70,0x00,0x00,0x0F,0x10,0x17,0x15,0x17,0x14,0x00}, /* "@" */
     {0x00,0x00,0xE0,0x18,0x18,0xE0,0x00,0x00,0x00,0x1F,0x04,0x04,0x04,0x04,0x1F,0x00}, /* "A" */
     {0x00,0xF8,0x88,0x88,0x88,0x88,0x70,0x00,0x00,0x3F,0x20,0x20,0x20,0x20,0x1F,0x00}, /* "B" */
-    {0x00,0x70,0x88,0x08,0x08,0x08,0x30,0x00,0x00,0x0F,0x10,0x20,0x20,0x20,0x10,0x00}, /* "C" */
+    {0xE0,0x10,0x08,0x08,0x08,0x08,0x10,0x00,0x07,0x08,0x10,0x10,0x10,0x10,0x08,0x00}, /* "C" - fixed, was rendering too closed (looked like "E") */
     {0x00,0xF8,0x08,0x08,0x08,0x10,0xE0,0x00,0x00,0x3F,0x20,0x20,0x20,0x10,0x0F,0x00}, /* "D" */
     {0x00,0xF8,0x88,0x88,0x88,0x08,0x08,0x00,0x00,0x3F,0x20,0x20,0x20,0x20,0x20,0x00}, /* "E" */
     {0x00,0xF8,0x88,0x88,0x88,0x08,0x08,0x00,0x00,0x3F,0x00,0x00,0x00,0x00,0x00,0x00}, /* "F" */
-    {0x00,0x70,0x88,0x08,0x08,0x88,0xF0,0x00,0x00,0x0F,0x10,0x20,0x20,0x20,0x1F,0x00}, /* "G" */
+    {0xE0,0x10,0x08,0x08,0x88,0x88,0x90,0x00,0x07,0x08,0x10,0x10,0x10,0x10,0x08,0x07}, /* "G" - fixed, previous bytes didn't read as a G */
     {0x00,0xF8,0x80,0x80,0x80,0x80,0xF8,0x00,0x00,0x3F,0x00,0x00,0x00,0x00,0x3F,0x00}, /* "H" */
     {0x00,0x08,0x08,0xF8,0x08,0x08,0x00,0x00,0x00,0x20,0x20,0x3F,0x20,0x20,0x00,0x00}, /* "I" */
     {0x00,0x00,0x08,0x08,0xF8,0x08,0x08,0x00,0x00,0x1C,0x20,0x20,0x20,0x1F,0x00,0x00}, /* "J" */
@@ -72,9 +72,9 @@ static const uint8_t g_asc2_1608[95][16] = {
     {0x00,0xF8,0x10,0x20,0x10,0x00,0xF8,0x00,0x00,0x3F,0x00,0x00,0x00,0x00,0x3F,0x00}, /* "M" */
     {0x00,0xF8,0x10,0x20,0x40,0x80,0xF8,0x00,0x00,0x3F,0x00,0x00,0x00,0x00,0x3F,0x00}, /* "N" */
     {0x00,0xE0,0x10,0x08,0x08,0x10,0xE0,0x00,0x00,0x0F,0x10,0x20,0x20,0x20,0x10,0x0F}, /* "O" */
-    {0x00,0xF8,0x88,0x88,0x88,0x88,0x70,0x00,0x00,0x3F,0x02,0x02,0x02,0x02,0x01,0x00}, /* "P" */
+    {0x00,0xF8,0x88,0x88,0x88,0x88,0x70,0x00,0x00,0x3F,0x00,0x00,0x00,0x00,0x00,0x00}, /* "P" - fixed, had a spurious extra loop below the real one */
     {0x00,0x70,0x88,0x08,0x08,0x88,0x70,0x00,0x00,0x0F,0x10,0x20,0x30,0x20,0x1F,0x00}, /* "Q" */
-    {0x00,0xF8,0x88,0x88,0x88,0x88,0x70,0x00,0x00,0x3F,0x02,0x06,0x0A,0x12,0x20,0x00}, /* "R" */
+    {0x00,0xF8,0x88,0x88,0x88,0x88,0x70,0x00,0x00,0x3F,0x00,0x00,0x01,0x02,0x0C,0x30}, /* "R" - fixed, had the same spurious extra loop as "P" */
     {0x00,0x70,0x88,0x88,0x88,0x88,0x30,0x00,0x00,0x18,0x20,0x20,0x20,0x20,0x1F,0x00}, /* "S" */
     {0x00,0x08,0x08,0xF8,0x08,0x08,0x00,0x00,0x00,0x00,0x00,0x3F,0x00,0x00,0x00,0x00}, /* "T" */
     {0x00,0xF8,0x00,0x00,0x00,0x00,0xF8,0x00,0x00,0x0F,0x10,0x20,0x20,0x20,0x10,0x0F}, /* "U" */
@@ -83,6 +83,16 @@ static const uint8_t g_asc2_1608[95][16] = {
     {0x00,0x08,0x30,0xC0,0x30,0x08,0x00,0x00,0x00,0x20,0x18,0x07,0x18,0x20,0x00,0x00}, /* "X" */
     {0x00,0x08,0x30,0xC0,0x30,0x08,0x00,0x00,0x00,0x00,0x00,0x3F,0x00,0x00,0x00,0x00}, /* "Y" */
     {0x00,0x08,0x08,0x88,0x48,0x38,0x08,0x00,0x00,0x20,0x30,0x28,0x24,0x22,0x21,0x00}, /* "Z" */
+
+    /* Only space through 'Z' were ever defined above (59 of the declared 95
+     * entries) - everything past 'Z' silently zero-initializes to a BLANK
+     * glyph. That includes every lowercase letter, which is why "cm" (the
+     * unit suffix on page 2's Ultra/IR lines) was rendering as literally
+     * invisible. Adding just the two characters actually in use via
+     * designated initializers, rather than filling in the entire unused
+     * '['-'~' range this table was never populated for. */
+    [67] = {0x00,0x80,0x40,0x40,0x40,0x80,0x00,0x00,0x00,0x07,0x08,0x08,0x08,0x04,0x00,0x00}, /* "c" */
+    [77] = {0xC0,0x40,0x80,0x40,0xC0,0x00,0x00,0x00,0x07,0x00,0x07,0x00,0x07,0x00,0x00,0x00}, /* "m" */
 };
 
 static void oled_write_byte(uint8_t dat, uint8_t cmd)
@@ -192,69 +202,140 @@ void oled_show_string_8x16_offset(uint8_t row, uint8_t x_offset, const char *str
     }
 }
 
-void oled_render_page1(float battery_v, float left_speed, float right_speed, float steer_deg, float yaw_deg)
+void oled_render_page1(float battery_v, uint8_t estop_state, float left_speed, float right_speed,
+                        float steer_deg, float yaw_deg, int32_t enc_left, int32_t enc_right)
 {
     char buf[16];
 
-    snprintf(buf, sizeof(buf), "SYS:OK  %.1fV", battery_v);
+    /* Battery + ESTOP combined onto one row (was two separate rows) - both
+     * fixed-width so a value change can't leave a stray glyph behind (this
+     * is what caused "9.9VV" and a leftover "D" from "ENGAGED" before):
+     * %4.1f is constant width regardless of digit count, and "ENG"/"RDY"
+     * are both exactly 3 characters, no padding needed either way. */
+    snprintf(buf, sizeof(buf), "B:%4.1fV ES:%s", (double)battery_v, estop_state ? "ENG" : "RDY");
     oled_show_string_8x16_offset(0, 12, buf);
 
-    snprintf(buf, sizeof(buf), "ROS: ACM0 50Hz");
+    /* Encoder counts, moved up from page 2 to make room there and keep
+     * everything drive-related on one page. "ENC left:right" rather than
+     * this page's "L:.. R:.." style below on purpose - that L/R is wheel
+     * SPEED (ticks/sec), this is cumulative tick COUNT, a different
+     * quantity that would look like the same thing sharing that label.
+     * Width 5 on the numbers (not 4) since encoder counts can run into 5
+     * digits over a session, unlike the small values below. */
+    snprintf(buf, sizeof(buf), "ENC%5ld:%5ld", (long)enc_left, (long)enc_right);
     oled_show_string_8x16_offset(1, 12, buf);
 
-    snprintf(buf, sizeof(buf), "L:%.2f  R:%.2f", left_speed, right_speed);
+    /* Display is 128px wide, this row starts at x=12, so there's only
+     * 116px = 14.5 chars of room - oled_set_pos()/oled_write_byte() never
+     * bounds-check x, so writing past column 127 wraps onto the next
+     * page instead of erroring. "%.2f" with no width was unbounded and
+     * already overflowed by 12px even at everyday values (e.g.
+     * "L:12.34  R:12.34" = 16 chars = 128px, right at the edge with zero
+     * margin) - %4.1f fixes both the width AND drops to a fixed field so
+     * it can't grow past this budget. */
+    snprintf(buf, sizeof(buf), "L:%4.1f R:%4.1f", (double)left_speed, (double)right_speed);
     oled_show_string_8x16_offset(2, 12, buf);
 
-    snprintf(buf, sizeof(buf), "STR:%+3.0f  Y:%+3.0f", steer_deg, yaw_deg);
+    /* Y = yaw, degrees - this board's own raw gyro-integrated estimate
+     * (imu.c), not the Pi-side EKF's fused /odometry/filtered heading.
+     * Same overflow fix as above - steer realistically stays within
+     * width 3 (+/-35 max), yaw needs width 4 to safely hold 3-digit
+     * swings (+180 etc) without exceeding its field. */
+    snprintf(buf, sizeof(buf), "STR:%+3.0f Y:%+4.0f", (double)steer_deg, (double)yaw_deg);
     oled_show_string_8x16_offset(3, 12, buf);
 }
 
-void oled_render_page2(float us_cm, uint16_t ir_raw, float ir_voltage, float ir_distance_cm)
+void oled_render_page2(float us_cm, float ir_cm)
+{
+    char buf[16];
+    char numbuf[8];
+
+    oled_show_string_8x16_offset(0, 12, "==SENSORS====");
+
+    /* Same fixed-width fix as page 1's battery/ESTOP lines: format the
+     * number into a constant-width field first (5 chars either way) so
+     * "--" doesn't leave stray glyphs behind from a previous longer
+     * reading. */
+    if (us_cm >= 0.0f) {
+        snprintf(numbuf, sizeof(numbuf), "%5.1f", (double)us_cm);
+    } else {
+        snprintf(numbuf, sizeof(numbuf), "  -- ");
+    }
+    snprintf(buf, sizeof(buf), "Ultra:%scm", numbuf);
+    oled_show_string_8x16_offset(1, 12, buf);
+
+    /* Only one physical IR sensor is wired (ir_sensor.c), despite
+     * docs/hardware.md listing two - shown once, in cm only, rather than
+     * the raw ADC count and volts it used to also print alongside it. */
+    snprintf(buf, sizeof(buf), "IR:   %5.1fcm", (double)ir_cm);
+    oled_show_string_8x16_offset(2, 12, buf);
+}
+
+void oled_render_page3(float gyro_x, float gyro_y, float gyro_z)
 {
     char buf[16];
 
-    oled_show_string_8x16_offset(0, 12, "== DISTANCE =");
+    oled_show_string_8x16_offset(0, 12, "==GYRO dps===");
 
-    snprintf(buf, sizeof(buf), "Ultra:%4.1f cm", us_cm);
+    /* deg/s, bias-corrected + unit-scaled (imu.c) but NOT further filtered -
+     * this is what the Pi-side EKF actually fuses (Z only, see ekf.yaml).
+     * One axis per row - three floats with labels do not fit on one 116px
+     * row at any useful precision. */
+    snprintf(buf, sizeof(buf), "X:%+7.2f", (double)gyro_x);
     oled_show_string_8x16_offset(1, 12, buf);
 
-    snprintf(buf, sizeof(buf), "IR raw:%4u", ir_raw);
+    snprintf(buf, sizeof(buf), "Y:%+7.2f", (double)gyro_y);
     oled_show_string_8x16_offset(2, 12, buf);
 
-    snprintf(buf, sizeof(buf), "IR:%1.2fV %4.1fcm", ir_voltage, ir_distance_cm);
+    snprintf(buf, sizeof(buf), "Z:%+7.2f", (double)gyro_z);
     oled_show_string_8x16_offset(3, 12, buf);
 }
 
-void oled_render_page3(uint8_t estop_state, int32_t enc_left, int32_t enc_right, uint32_t uptime_sec)
+void oled_render_page4(float accel_x, float accel_y, float accel_z)
 {
     char buf[16];
 
-    snprintf(buf, sizeof(buf), "ESTOP: %s", estop_state ? "ENGAGED" : "READY ");
-    oled_show_string_8x16_offset(0, 12, buf);
+    oled_show_string_8x16_offset(0, 12, "==ACCEL m/s2=");
 
-    snprintf(buf, sizeof(buf), "Enc L: %ld", enc_left);
+    /* Raw ADC x fixed scale ONLY - unlike gyro, there is no bias
+     * calibration applied to accel at all (see imu.c). Robot flat and
+     * still should read ~9.81 on whichever axis is vertical, ~0 on the
+     * other two - useful sanity check for whether the IMU is mounted the
+     * orientation the firmware assumes (no axis remap applied anywhere). */
+    snprintf(buf, sizeof(buf), "X:%+6.2f", (double)accel_x);
     oled_show_string_8x16_offset(1, 12, buf);
 
-    snprintf(buf, sizeof(buf), "Enc R: %ld", enc_right);
+    snprintf(buf, sizeof(buf), "Y:%+6.2f", (double)accel_y);
     oled_show_string_8x16_offset(2, 12, buf);
 
-    snprintf(buf, sizeof(buf), "Uptime: %02ld:%02ld", uptime_sec / 60, uptime_sec % 60);
+    snprintf(buf, sizeof(buf), "Z:%+6.2f", (double)accel_z);
     oled_show_string_8x16_offset(3, 12, buf);
 }
 
-/**
- * @brief Page 4: Bezel Alignment Calibration Test Page (x_offset = 0, full 16 characters)
- */
-void oled_render_page4(void)
+void oled_render_page5(uint16_t pwm_us, uint16_t pwm_center_us, float steer_deg)
 {
-    oled_show_string_8x16_offset(0, 0, "1234567890123456");
-    oled_show_string_8x16_offset(1, 0, "|==============|");
-    oled_show_string_8x16_offset(2, 0, "ABCDEFGHIJKLMNOP");
-    oled_show_string_8x16_offset(3, 0, "<-------------->");
+    char buf[16];
+
+    oled_show_string_8x16_offset(0, 12, "==STEERING===");
+
+    /* Actual pulse width read back from TIM12_CH2's compare register
+     * (servo_get_pulse_us()) - what the servo is ACTUALLY being sent, not
+     * just what was last commanded. */
+    snprintf(buf, sizeof(buf), "PWM: %4uus", pwm_us);
+    oled_show_string_8x16_offset(1, 12, buf);
+
+    /* The calibrated center (servo_pulse_center_us(), currently 1490us) -
+     * shown alongside PWM so a center-trim check doesn't need ROS/a
+     * laptop, just watch this while at angle 0. */
+    snprintf(buf, sizeof(buf), "CTR: %4uus", pwm_center_us);
+    oled_show_string_8x16_offset(2, 12, buf);
+
+    snprintf(buf, sizeof(buf), "ANGLE:%+4.0f", (double)steer_deg);
+    oled_show_string_8x16_offset(3, 12, buf);
 }
 
 void oled_next_page(void)
 {
-    g_oled_page = (g_oled_page + 1) % 4; /* Loop through 4 pages */
+    g_oled_page = (g_oled_page + 1) % 5; /* Loop through 5 pages */
     oled_clear();
 }

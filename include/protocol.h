@@ -55,6 +55,10 @@ typedef struct {
     uint16_t ir_raw;        /* IR ADC reading (0-4095), PC2/ADC1_CH12 */
     float    ir_voltage;    /* IR sensor output voltage (V) */
     float    ir_distance_cm; /* Estimated IR distance (cm) */
+    float    ultrasonic_cm;  /* HC-SR04 distance (cm), TIM5 input capture on
+                               * PA2/PA3 (ultrasonic.c) - negative means no
+                               * valid echo (disabled, out of range, or the
+                               * last valid reading is stale >300ms) */
     uint32_t uptime_ms;
     uint8_t  checksum;      /* XOR of all bytes from 'type' through 'uptime_ms' */
 } telemetry_packet_t;

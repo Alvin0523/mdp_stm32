@@ -192,45 +192,50 @@ void oled_show_string_8x16_offset(uint8_t row, uint8_t x_offset, const char *str
     }
 }
 
-void oled_render_page1(float battery_v, float left_speed, float right_speed, float steer_deg, float yaw_deg)
+void oled_render_page1(float battery_v, uint8_t estop_state, float left_speed, float right_speed, float steer_deg, float yaw_deg)
 {
     char buf[16];
 
     snprintf(buf, sizeof(buf), "SYS:OK  %.1fV", battery_v);
     oled_show_string_8x16_offset(0, 12, buf);
 
-    snprintf(buf, sizeof(buf), "ROS: ACM0 50Hz");
+    snprintf(buf, sizeof(buf), "ESTOP: %s", estop_state ? "ENGAGED" : "READY ");
     oled_show_string_8x16_offset(1, 12, buf);
 
     snprintf(buf, sizeof(buf), "L:%.2f  R:%.2f", left_speed, right_speed);
     oled_show_string_8x16_offset(2, 12, buf);
 
+    /* Y = yaw, degrees - this board's own raw gyro-integrated estimate
+     * (imu.c), not the Pi-side EKF's fused /odometry/filtered heading. */
     snprintf(buf, sizeof(buf), "STR:%+3.0f  Y:%+3.0f", steer_deg, yaw_deg);
     oled_show_string_8x16_offset(3, 12, buf);
 }
 
-void oled_render_page2(float us_cm, uint16_t ir_raw, float ir_voltage, float ir_distance_cm)
+void oled_render_page2(float us_cm, float ir_cm)
 {
     char buf[16];
 
     oled_show_string_8x16_offset(0, 12, "== DISTANCE =");
 
-    snprintf(buf, sizeof(buf), "Ultra:%4.1f cm", us_cm);
+    if (us_cm >= 0.0f) {
+        snprintf(buf, sizeof(buf), "Ultra:%5.1fcm", us_cm);
+    } else {
+        snprintf(buf, sizeof(buf), "Ultra: --");
+    }
     oled_show_string_8x16_offset(1, 12, buf);
 
-    snprintf(buf, sizeof(buf), "IR raw:%4u", ir_raw);
+    /* Only one physical IR sensor is wired (ir_sensor.c), despite
+     * docs/hardware.md listing two - shown once, in cm only, rather than
+     * the raw ADC count and volts it used to also print alongside it. */
+    snprintf(buf, sizeof(buf), "IR:   %5.1fcm", ir_cm);
     oled_show_string_8x16_offset(2, 12, buf);
-
-    snprintf(buf, sizeof(buf), "IR:%1.2fV %4.1fcm", ir_voltage, ir_distance_cm);
-    oled_show_string_8x16_offset(3, 12, buf);
 }
 
-void oled_render_page3(uint8_t estop_state, int32_t enc_left, int32_t enc_right, uint32_t uptime_sec)
+void oled_render_page3(int32_t enc_left, int32_t enc_right, uint32_t uptime_sec)
 {
     char buf[16];
 
-    snprintf(buf, sizeof(buf), "ESTOP: %s", estop_state ? "ENGAGED" : "READY ");
-    oled_show_string_8x16_offset(0, 12, buf);
+    oled_show_string_8x16_offset(0, 12, "== DIAG =====");
 
     snprintf(buf, sizeof(buf), "Enc L: %ld", enc_left);
     oled_show_string_8x16_offset(1, 12, buf);
@@ -242,19 +247,8 @@ void oled_render_page3(uint8_t estop_state, int32_t enc_left, int32_t enc_right,
     oled_show_string_8x16_offset(3, 12, buf);
 }
 
-/**
- * @brief Page 4: Bezel Alignment Calibration Test Page (x_offset = 0, full 16 characters)
- */
-void oled_render_page4(void)
-{
-    oled_show_string_8x16_offset(0, 0, "1234567890123456");
-    oled_show_string_8x16_offset(1, 0, "|==============|");
-    oled_show_string_8x16_offset(2, 0, "ABCDEFGHIJKLMNOP");
-    oled_show_string_8x16_offset(3, 0, "<-------------->");
-}
-
 void oled_next_page(void)
 {
-    g_oled_page = (g_oled_page + 1) % 4; /* Loop through 4 pages */
+    g_oled_page = (g_oled_page + 1) % 3; /* Loop through 3 pages */
     oled_clear();
 }

@@ -186,6 +186,16 @@ int main(void)
             telemetry.ir_raw = ir_raw;
             telemetry.ir_voltage = ir_voltage;
             telemetry.ir_distance_cm = ir_distance_cm;
+            /* ultrasonic_update() runs every raw loop pass (not tiered, see
+             * its call near the top of this loop), so this read is always
+             * fresh regardless of which OLED page is selected - unlike
+             * battery/IR above, which are genuinely slow-tier-owned
+             * (blocking ADC reads). */
+            {
+                float ultrasonic_cm = -1.0f;
+                (void)ultrasonic_get_distance_cm(&ultrasonic_cm);
+                telemetry.ultrasonic_cm = ultrasonic_cm;
+            }
             telemetry.uptime_ms = HAL_GetTick();
             uart_send_telemetry(&telemetry);
         }

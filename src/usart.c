@@ -187,6 +187,10 @@ static telemetry_packet_t s_tx_telemetry;
 
 void uart_send_telemetry(const telemetry_packet_t *pkt)
 {
+    /* The TX interrupt still owns the buffer until the transfer finishes. */
+    if (huart3.gState != HAL_UART_STATE_READY) {
+        return;
+    }
     s_tx_telemetry = *pkt;
     s_tx_telemetry.sync0 = PROTOCOL_SYNC0;
     s_tx_telemetry.sync1 = PROTOCOL_SYNC1;
@@ -196,8 +200,8 @@ void uart_send_telemetry(const telemetry_packet_t *pkt)
         sizeof(s_tx_telemetry) - offsetof(telemetry_packet_t, type) - 1);
 
     /* Interrupt-driven, not blocking: at the fast tier's 100Hz/10ms period
-     * (main.c), blocking for the ~4.7ms this 54-byte packet takes to shift
-     * out at 115200 baud would eat ~47% of the whole budget every cycle.
+     * (main.c), blocking for the ~6.9ms this 80-byte packet takes to shift
+     * out at 115200 baud would eat ~69% of the whole budget every cycle.
      * HAL_UART_Transmit_IT() kicks off the transfer and returns
      * immediately; the same USART3_IRQHandler already servicing RX finishes
      * it in the background. If the previous packet is still transmitting

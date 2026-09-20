@@ -8,7 +8,7 @@
  * a receiver can resync after a dropped/corrupted byte.
  *
  * IMPORTANT: this struct layout is mirrored by hand in the ROS2 bridge node
- * (mdp_ros/src/mdp_hardware_bridge). If you change a field here, update it
+ * (mdp_ros/src/mdp_bridge). If you change a field here, update it
  * there too - there is no shared build-time header between the two repos.
  * Both sides are little-endian (Cortex-M4 and aarch64/x86_64 Pi), so no
  * byte-swapping is done.
@@ -60,6 +60,9 @@ typedef struct {
     uint16_t ir_raw;        /* IR ADC reading (0-4095), PC2/ADC1_CH12 */
     float    ir_voltage;    /* IR sensor output voltage (V) */
     float    ir_distance_cm; /* Estimated IR distance (cm) */
+    uint16_t ir2_raw;       /* Second IR ADC reading, PC1/ADC1_CH11 */
+    float    ir2_voltage;   /* Second IR sensor output voltage (V) */
+    float    ir2_distance_cm; /* Second IR estimated distance (cm) */
     float    ultrasonic_cm;  /* HC-SR04 distance (cm), TIM5 input capture on
                                * PA2/PA3 (ultrasonic.c) - negative means no
                                * valid echo (disabled, out of range, or the

@@ -251,7 +251,7 @@ void oled_render_page1(float battery_v, uint8_t estop_state, float left_speed, f
     oled_show_string_8x16_offset(3, 12, buf);
 }
 
-void oled_render_page2(float us_cm, float ir_cm)
+void oled_render_page2(float us_cm, float ir_cm, float ir2_cm)
 {
     char buf[16];
     char numbuf[8];
@@ -270,11 +270,10 @@ void oled_render_page2(float us_cm, float ir_cm)
     snprintf(buf, sizeof(buf), "Ultra:%scm", numbuf);
     oled_show_string_8x16_offset(1, 12, buf);
 
-    /* Only one physical IR sensor is wired (ir.c), despite
-     * docs/hardware.md listing two - shown once, in cm only, rather than
-     * the raw ADC count and volts it used to also print alongside it. */
-    snprintf(buf, sizeof(buf), "IR:   %5.1fcm", (double)ir_cm);
+    snprintf(buf, sizeof(buf), "IR1:  %5.1fcm", (double)ir_cm);
     oled_show_string_8x16_offset(2, 12, buf);
+    snprintf(buf, sizeof(buf), "IR2:  %5.1fcm", (double)ir2_cm);
+    oled_show_string_8x16_offset(3, 12, buf);
 }
 
 void oled_render_page3(float gyro_x, float gyro_y, float gyro_z)
@@ -283,11 +282,7 @@ void oled_render_page3(float gyro_x, float gyro_y, float gyro_z)
 
     oled_show_string_8x16_offset(0, 12, "==GYRO dps===");
 
-    if (us_cm >= 0.0f) {
-        snprintf(buf, sizeof(buf), "Ultra:%5.1fcm ", us_cm);
-    } else {
-        snprintf(buf, sizeof(buf), "Ultra: --     ");
-    }
+    snprintf(buf, sizeof(buf), "X:%+7.2f", (double)gyro_x);
     oled_show_string_8x16_offset(1, 12, buf);
 
     snprintf(buf, sizeof(buf), "Y:%+7.2f", (double)gyro_y);

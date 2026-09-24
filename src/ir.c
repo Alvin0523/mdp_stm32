@@ -1,13 +1,14 @@
 /**
- * @file ir.c
- * @brief Analog IR sensor driver implementation for PC1 (ADC1 channel 11).
+ * @file ir_sensor.c
+ * @brief Analog IR sensors: IR1 on PC2/ADC1_CH12, IR2 on PC1/ADC1_CH11.
  *
- * Analog IR sensor connected to PC1. Reads raw 12-bit ADC values where higher
+ * Two analog IR sensors connected to PC2 and PC1. Reads raw 12-bit ADC values where higher
  * values typically indicate closer object proximity.
  */
 
 #include "ir.h"
 #include <math.h>
+#include <stdio.h>
 
 static ADC_HandleTypeDef s_hadc1_ir;
 
@@ -17,7 +18,7 @@ void ir_init(void)
     __HAL_RCC_ADC1_CLK_ENABLE();
 
     GPIO_InitTypeDef GPIO_InitStruct = {0};
-    GPIO_InitStruct.Pin = GPIO_PIN_2;
+    GPIO_InitStruct.Pin = GPIO_PIN_2 | GPIO_PIN_1;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
@@ -37,11 +38,13 @@ void ir_init(void)
     HAL_ADC_Init(&s_hadc1_ir);
 }
 
-uint16_t ir_read_raw(void)
+/* ADC1 is shared with battery.c. Read sequentially from the main loop;
+ * select the channel on every read and stop before the next user. */
+static uint16_t ir_read_channel(uint32_t channel)
 {
     ADC_ChannelConfTypeDef sConfig = {0};
 
-    sConfig.Channel = ADC_CHANNEL_12;
+    sConfig.Channel = channel;
     sConfig.Rank = 1;
     sConfig.SamplingTime = ADC_SAMPLETIME_480CYCLES;
 
@@ -73,11 +76,26 @@ uint16_t ir_read_raw(void)
     HAL_ADC_Stop(&s_hadc1_ir);
 
     /* Was unconditional on every read (5Hz, forever) - drowned out anything
-     * else on USART1. The value is visible via /ir (ROS/Foxglove) and the
+     * else on USART1. The distance is visible via ROS telemetry and the
      * OLED now, so this isn't needed for normal operation. Re-enable only
      * for standalone bench bring-up with no Pi/ROS connected. */
     /* printf("ADC raw: %u\r\n", raw); */
     return raw;
+}
+
+uint16_t ir_read_raw(void)
+{
+    return ir_read_channel(ADC_CHANNEL_12);
+}
+
+uint16_t ir_sensor2_read_raw(void)
+{
+    return ir_read_channel(ADC_CHANNEL_11);
+}
+
+float ir_sensor2_read_voltage(void)
+{
+    return (float)ir_sensor2_read_raw() / 4095.0f * 3.3f;
 }
 
 float ir_read_voltage(void)
@@ -111,6 +129,11 @@ float ir_raw_to_distance_cm(uint16_t raw)
     }
 
     return distance;
+}
+
+float ir_sensor2_read_distance_cm(void)
+{
+    return ir_raw_to_distance_cm(ir_sensor2_read_raw());
 }
 
 float ir_read_distance_cm(void)

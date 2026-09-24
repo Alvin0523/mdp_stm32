@@ -83,6 +83,9 @@ int main(void)
     uint16_t ir_raw = 0U;
     float ir_voltage = 0.0f;
     float ir_distance_cm = -1.0f;
+    uint16_t ir2_raw = 0U;
+    float ir2_voltage = 0.0f;
+    float ir2_distance_cm = -1.0f;
 
     /* PROTOCOL_COMMAND_TIMEOUT_MS: if no valid command packet arrives from
      * the host within this window, stop driving (fail safe) rather than
@@ -110,11 +113,7 @@ int main(void)
 
     while (1)
     {
-        /* Non-blocking trigger/capture state machine (TIM5 input capture on
-         * PA2/PA3) - runs every pass, not tiered, same as ported from the
-         * songli branch's implementation. */
         ultrasonic_update();
-
         /* PE0 press during normal operation is dual-purpose, gated on PD3:
          * - PD3 ready (not engaged): self-test can actually drive the
          *   motors, so run it (outside the ISR, since it blocks).
@@ -187,6 +186,9 @@ int main(void)
             telemetry.ir_raw = ir_raw;
             telemetry.ir_voltage = ir_voltage;
             telemetry.ir_distance_cm = ir_distance_cm;
+            telemetry.ir2_raw = ir2_raw;
+            telemetry.ir2_voltage = ir2_voltage;
+            telemetry.ir2_distance_cm = ir2_distance_cm;
             /* ultrasonic_update() runs every raw loop pass (not tiered, see
              * its call near the top of this loop), so this read is always
              * fresh regardless of which OLED page is selected - unlike
@@ -211,6 +213,17 @@ int main(void)
             ir_raw = ir_read_raw();
             ir_voltage = (float)ir_raw * (3.3f / 4095.0f);
             ir_distance_cm = ir_raw_to_distance_cm(ir_raw);
+            ir2_raw = ir_sensor2_read_raw();
+            ir2_voltage = (float)ir2_raw * (3.3f / 4095.0f);
+            ir2_distance_cm = ir_raw_to_distance_cm(ir2_raw);
+
+            float ultrasonic_cm = -1.0f;
+            bool ultrasonic_valid = ultrasonic_get_distance_cm(&ultrasonic_cm);
+            if (ultrasonic_valid) {
+                printf("[Ultrasonic] %.1f cm\r\n", ultrasonic_cm);
+            } else {
+                printf("[Ultrasonic] %s\r\n", ULTRASONIC_ENABLED ? "No echo / invalid" : "Disabled");
+            }
 
             /* Render Current OLED Display Page based on g_oled_page */
             switch (g_oled_page) {
@@ -228,20 +241,10 @@ int main(void)
                                        encoder_get_count_a(), encoder_get_count_b());
                     break;
 
-                case 1: {
-                    /* Page 2: Distance sensor detail (Ultrasonic & IR) -
-                     * secondary/debug info, already visible on Foxglove
-                     * from the Pi side, so it doesn't need to compete for
-                     * space on page 1. Ultrasonic is a real HC-SR04 reading
-                     * now (ultrasonic.c, ported from the songli branch) -
-                     * -1 means no valid echo yet (disabled, out of range,
-                     * or stale >300ms), rendered as "--" rather than a
-                     * stale/fake number. */
-                    float ultrasonic_cm = -1.0f;
-                    (void)ultrasonic_get_distance_cm(&ultrasonic_cm);
-                    oled_render_page2(ultrasonic_cm, ir_distance_cm);
+                case 1:
+                    /* Page 2: Distance Sensors (Ultrasonic & IR). */
+                    oled_render_page2(ultrasonic_cm, ir_distance_cm, ir2_distance_cm);
                     break;
-                }
 
                 case 2:
                     /* Page 3: raw gyro (deg/s), all three axes - see

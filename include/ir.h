@@ -14,7 +14,7 @@ extern "C" {
 
 /* Configure both inputs. Blocking reads are main-loop-only: ADC1 is shared
  * with battery.c. Both sensors use the Sharp GP2Y0A21YK 10-80 cm curve. */
-void ir_sensor_init(void);
+void ir_init(void);
 /**
  * @brief Read analog IR sensor voltage.
  * @return Raw ADC value (0-4095, 12-bit), where higher values indicate closer objects.

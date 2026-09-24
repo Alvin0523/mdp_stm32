@@ -212,10 +212,10 @@ int main(void)
 
             ir_raw = ir_read_raw();
             ir_voltage = (float)ir_raw * (3.3f / 4095.0f);
-            ir_distance_cm = ir_sensor_raw_to_distance_cm(ir_raw);
+            ir_distance_cm = ir_raw_to_distance_cm(ir_raw);
             ir2_raw = ir_sensor2_read_raw();
             ir2_voltage = (float)ir2_raw * (3.3f / 4095.0f);
-            ir2_distance_cm = ir_sensor_raw_to_distance_cm(ir2_raw);
+            ir2_distance_cm = ir_raw_to_distance_cm(ir2_raw);
 
             float ultrasonic_cm = -1.0f;
             bool ultrasonic_valid = ultrasonic_get_distance_cm(&ultrasonic_cm);

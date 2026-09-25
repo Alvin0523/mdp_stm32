@@ -1,3 +1,6 @@
 # mdp_stm32
 
-See the [STM32 documentation](https://alvin0523.github.io/mdp/stm32/) for firmware architecture, driver status, tuning, and the serial protocol.
+Part of the MDP robot. All documentation — setup, how to run sim and the real robot, and
+how everything works — lives in the main repository:
+
+**https://github.com/Alvin0523/mdp** · docs site: **https://alvin0523.github.io/mdp/**

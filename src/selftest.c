@@ -679,11 +679,8 @@ typedef struct {
 } servo_cal_point_t;
 
 static const servo_cal_point_t s_servo_cal_points[] = {
-    {  840U, 35.0f, "LEFT  840" },  /* left mechanical limit (chassis contact) */
-    { 2400U, 29.5f, "RIGHT 2400" }, /* NOT a confirmed limit - this was the old
-                                     * SERVO_CAL_PULSE_MAX_US ceiling, and the
-                                     * wheel was still tracking when it was
-                                     * reached. See PHASE 2. */
+    {  850U, 43.0f, "LEFT  850" },  /* left mechanical limit (chassis contact), 2026-09-18 */
+    { 2400U, 32.5f, "RIGHT 2400" }, /* right mechanical stop, 2026-09-18 */
 };
 
 /* Drives to each recorded point in turn, button-advanced, showing the pulse

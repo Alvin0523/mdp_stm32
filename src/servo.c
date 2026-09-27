@@ -50,10 +50,11 @@
  * Two protractor readings at the wheel, one per lock direction, plus a
  * measured (not assumed) center:
  *
- *   left  (positive):  0 deg -> 1490us,  35.0 deg -> 840us   (-650us)
- *   right (negative):  0 deg -> 1490us, -29.5 deg -> 2400us   (+910us)
+ *   left  (positive):  0 deg -> 1490us,  43.0 deg -> 850us   (-640us)
+ *   right (negative):  0 deg -> 1490us, -32.5 deg -> 2400us   (+910us)
+ *   (endpoints re-measured 2026-09-18, see SERVO_CAL_* below)
  *
- * Slope is therefore per-side: ~-18.6us/deg left, ~-30.8us/deg right. Both
+ * Slope is therefore per-side: ~-14.9us/deg left, ~-28.0us/deg right. Both
  * are negative because a lengthening pulse steers right on this unit. The
  * sides differ by nearly 2x, which is why a single shared slope cannot work.
  *
@@ -81,9 +82,14 @@
 
 /* Measured endpoints. Update these - not the derived slopes below - when
  * better calibration data exists. */
-#define SERVO_CAL_LEFT_ANGLE_DEG    35.0f
-#define SERVO_CAL_LEFT_PULSE_US    840.0f
-#define SERVO_CAL_RIGHT_ANGLE_DEG   29.5f  /* magnitude; commanded negative */
+/* RE-MEASURED 2026-09-18 (supersedes 35.0deg/840us and 29.5deg/2400us of
+ * 2026-09-11): raw-pulse sweeps found both mechanical limits - left 850us
+ * (chassis contact), right 2400us (confirmed stop) - and the protractor read
+ * 43.0deg and 32.5deg there. One servo + tie rod: both front wheels have the
+ * same angle, so these are THE steering angle. Updated here 2026-09-27. */
+#define SERVO_CAL_LEFT_ANGLE_DEG    43.0f
+#define SERVO_CAL_LEFT_PULSE_US    850.0f
+#define SERVO_CAL_RIGHT_ANGLE_DEG   32.5f  /* magnitude; commanded negative */
 #define SERVO_CAL_RIGHT_PULSE_US  2400.0f
 
 #define SERVO_DEG_TO_RAD (3.14159265f / 180.0f)

@@ -62,8 +62,15 @@ extern "C" {
  * Center is measured, not assumed: 1490us, found by pushing the car by hand
  * at candidate pulses with the motors off. The nominal 1500us curved right.
  * See docs/stm32/tuning.md. */
-#define SERVO_ANGLE_MAX_LEFT_RAD  (35.0f * 3.14159265f / 180.0f) /* ~0.6109 rad - measured at 840us, chassis contact */
-#define SERVO_ANGLE_MAX_RIGHT_RAD (29.5f * 3.14159265f / 180.0f) /* ~0.5149 rad - measured at 2400us, still tracking there */
+/* UPDATED 2026-09-27 to the 2026-09-18 re-measurement (the text above
+ * describes the older 35.0/29.5 readings): left 43.0deg at 850us (chassis
+ * contact), right 32.5deg at 2400us (confirmed mechanical stop). One servo
+ * drives the right wheel and a tie rod the left, so both wheels have the same
+ * angle - this is the steering angle, no inner/outer split. Must match
+ * mdp_ros planning_constants.STEERING_LIMIT_* and the URDF joint limits
+ * (0.7505 / -0.5672 rad). */
+#define SERVO_ANGLE_MAX_LEFT_RAD  (43.0f * 3.14159265f / 180.0f) /* ~0.7505 rad - measured at 850us, chassis contact */
+#define SERVO_ANGLE_MAX_RIGHT_RAD (32.5f * 3.14159265f / 180.0f) /* ~0.5672 rad - measured at 2400us, mechanical stop */
 
 void servo_init(void);
 

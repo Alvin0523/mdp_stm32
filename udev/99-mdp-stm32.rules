@@ -1,0 +1,4 @@
+# STM32 board's USB-serial adapter (WCH CH9102/CH343, 1a86:55d4, cdc_acm) -> /dev/stm32
+# Matches the chip type, not its serial number: a replacement adapter of the same
+# kind keeps the name. Install: pixi run udev (udev/install.sh)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", SYMLINK+="stm32", MODE="0660", GROUP="dialout", ENV{ID_MM_DEVICE_IGNORE}="1"

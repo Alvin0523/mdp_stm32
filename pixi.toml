@@ -14,6 +14,9 @@ build = { cmd = "pio run", description = "Build firmware via PlatformIO" }
 flash = { cmd = "pio run -t upload", description = "Flash firmware to board via ST-LINK (OpenOCD)" }
 monitor = { cmd = "pio device monitor", description = "Open serial monitor (baud/port from platformio.ini)" }
 
+## Host setup
+udev = { cmd = "udev/install.sh", description = "Install the udev rule: the STM32 board shows up as /dev/stm32 (once per machine, asks for sudo)" }
+
 [dependencies]
 pyserial = "*"
 platformio = "*"

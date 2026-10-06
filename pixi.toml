@@ -11,11 +11,12 @@ probe = { cmd = 'pio pkg exec -p tool-openocd -- openocd -f interface/stlink.cfg
 
 ## App Build & Flash (PlatformIO)
 build = { cmd = "pio run", description = "Build firmware via PlatformIO" }
-flash = { cmd = "pio run -t upload", description = "Flash firmware to board via ST-LINK (OpenOCD)" }
-monitor = { cmd = "pio device monitor", description = "Open serial monitor (baud/port from platformio.ini)" }
+flash = { cmd = "pio run -t upload", description = "Flash the firmware over USB: the board's UART1 port (/dev/stm32_flash), no ST-Link" }
+flash-stlink = { cmd = "pio run -e stlink -t upload", description = "Flash the firmware with an ST-Link on the SWD header" }
+monitor = { cmd = "pio device monitor", description = "Debug printf on UART1 (/dev/stm32_flash, platformio.ini)" }
 
 ## Host setup
-udev = { cmd = "udev/install.sh", description = "Install the udev rule: the STM32 board shows up as /dev/stm32 (once per machine, asks for sudo)" }
+udev = { cmd = "udev/install.sh", description = "Install the udev rule: /dev/stm32_serial (UART3, car link) and /dev/stm32_flash (UART1, flashing) - once per machine, asks for sudo" }
 
 [dependencies]
 pyserial = "*"

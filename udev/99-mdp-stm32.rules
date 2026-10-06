@@ -1,4 +1,8 @@
-# STM32 board's USB-serial adapter (WCH CH9102/CH343, 1a86:55d4, cdc_acm) -> /dev/stm32
-# Matches the chip type, not its serial number: a replacement adapter of the same
-# kind keeps the name. Install: pixi run udev (udev/install.sh)
-SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", SYMLINK+="stm32", MODE="0660", GROUP="dialout", ENV{ID_MM_DEVICE_IGNORE}="1"
+# The STM32 board's two USB-C ports, each a WCH CH9102F (1a86:55d4) on the board.
+# Same chip type, so they are told apart by serial number (fixed per chip; a
+# different board needs these two updated - udevadm info -q property -n /dev/ttyACM0).
+#   UART3 -> /dev/stm32_serial         the car link (mdp_bridge serial_bridge_node)
+#   UART1 -> /dev/stm32_flash   flashing (auto-boot via RTS/DTR) + debug printf
+# Install: pixi run udev (udev/install.sh)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", ATTRS{serial}=="5A6C068008", SYMLINK+="stm32_serial", MODE="0660", GROUP="dialout", ENV{ID_MM_DEVICE_IGNORE}="1"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", ATTRS{serial}=="5A6C068004", SYMLINK+="stm32_flash", MODE="0660", GROUP="dialout", ENV{ID_MM_DEVICE_IGNORE}="1"

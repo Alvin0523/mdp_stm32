@@ -94,7 +94,7 @@ int main(void)
 
     /* Two independent rate tiers (see docs/stm32/control_loop.md, "Main
      * loop timing allocation") instead of one shared HAL_Delay():
-     * - FAST_PERIOD_MS (100Hz): command/safety gating, IMU read, telemetry
+     * - FAST_PERIOD_MS (100Hz): command/safety gating, IMU + side IR read, telemetry
      *   TX - matches the motor PID's own 100Hz encoder sampling 1:1, so
      *   nothing the PID measures is throttled down before it reaches the
      *   Pi. Only viable because uart_send_telemetry() is interrupt-driven
@@ -164,6 +164,18 @@ int main(void)
             }
             servo_set_angle(steer_rad);
 
+            /* Side IRs every telemetry frame (was the 5Hz slow tier, so 19 of
+             * 20 frames repeated a stale value - too coarse for the Pi to
+             * average a scan stop or calibrate). Two 480-cycle ADC
+             * conversions at 14MHz = ~70us, <1% of this 10ms tier. The
+             * sensor itself refreshes every ~40ms; the Pi averages. */
+            ir_raw = ir_read_raw();
+            ir_voltage = (float)ir_raw * (3.3f / 4095.0f);
+            ir_distance_cm = ir_raw_to_distance_cm(ir_raw);
+            ir2_raw = ir_sensor2_read_raw();
+            ir2_voltage = (float)ir2_raw * (3.3f / 4095.0f);
+            ir2_distance_cm = ir_raw_to_distance_cm(ir2_raw);
+
             telemetry_packet_t telemetry = {0};
             telemetry.enc_left = encoder_get_count_a();
             telemetry.enc_right = encoder_get_count_b();
@@ -209,13 +221,6 @@ int main(void)
             HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_8); /* heartbeat LED */
 
             battery_v = battery_read_voltage();
-
-            ir_raw = ir_read_raw();
-            ir_voltage = (float)ir_raw * (3.3f / 4095.0f);
-            ir_distance_cm = ir_raw_to_distance_cm(ir_raw);
-            ir2_raw = ir_sensor2_read_raw();
-            ir2_voltage = (float)ir2_raw * (3.3f / 4095.0f);
-            ir2_distance_cm = ir_raw_to_distance_cm(ir2_raw);
 
             float ultrasonic_cm = -1.0f;
             bool ultrasonic_valid = ultrasonic_get_distance_cm(&ultrasonic_cm);

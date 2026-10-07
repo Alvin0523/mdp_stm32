@@ -104,36 +104,47 @@ float ir_read_voltage(void)
     return (float)raw / 4095.0f * 3.3f;
 }
 
-// id clean this up later -songli
-#define IR_DISTANCE_MIN_CM     10.0f
+/* Each sensor's own curve, distance = A / (raw/4095)^B, from `pixi run calib ir`
+ * on the car (2026-10-07, after the IR mounts were fixed; IR1 within 1.0 cm and
+ * IR2 within 0.4 cm at 13-25 cm). The SAME numbers as mdp_ros
+ * src/mdp_bringup/config/bridges.yaml (ir1_curve / ir2_curve), which the Pi
+ * applies to the raw values it gets in the telemetry - so the OLED shows what
+ * /ir and /ir2 show. Recalibrated: change both places. */
+#define IR1_CURVE_A            6.23f
+#define IR1_CURVE_B            1.210f
+#define IR2_CURVE_A            6.53f
+#define IR2_CURVE_B            1.157f
+#define IR_DISTANCE_MIN_CM     4.0f    /* as bridges.yaml ir_min_cm (Sharp is unreliable below ~7 cm) */
 #define IR_DISTANCE_MAX_CM     80.0f
-#define IR_DISTANCE_OFFSET_CM   0.0f
 
-float ir_raw_to_distance_cm(uint16_t raw)
+static float ir_curve_cm(uint16_t raw, float a, float b)
 {
     if (raw == 0U) {
         return IR_DISTANCE_MAX_CM;
     }
-
-    float normalized = (float)raw / 4095.0f;
-    float distance = 6.3028f / powf(normalized, 1.226f);
-
-    distance -= IR_DISTANCE_OFFSET_CM;
-
+    float distance = a / powf((float)raw / 4095.0f, b);
     if (distance > IR_DISTANCE_MAX_CM) {
         distance = IR_DISTANCE_MAX_CM;
     }
-
     if (distance < IR_DISTANCE_MIN_CM) {
         distance = IR_DISTANCE_MIN_CM;
     }
-
     return distance;
+}
+
+float ir_raw_to_distance_cm(uint16_t raw)
+{
+    return ir_curve_cm(raw, IR1_CURVE_A, IR1_CURVE_B);
+}
+
+float ir2_raw_to_distance_cm(uint16_t raw)
+{
+    return ir_curve_cm(raw, IR2_CURVE_A, IR2_CURVE_B);
 }
 
 float ir_sensor2_read_distance_cm(void)
 {
-    return ir_raw_to_distance_cm(ir_sensor2_read_raw());
+    return ir2_raw_to_distance_cm(ir_sensor2_read_raw());
 }
 
 float ir_read_distance_cm(void)

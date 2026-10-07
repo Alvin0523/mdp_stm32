@@ -174,7 +174,7 @@ int main(void)
             ir_distance_cm = ir_raw_to_distance_cm(ir_raw);
             ir2_raw = ir_sensor2_read_raw();
             ir2_voltage = (float)ir2_raw * (3.3f / 4095.0f);
-            ir2_distance_cm = ir_raw_to_distance_cm(ir2_raw);
+            ir2_distance_cm = ir2_raw_to_distance_cm(ir2_raw);
 
             telemetry_packet_t telemetry = {0};
             telemetry.enc_left = encoder_get_count_a();

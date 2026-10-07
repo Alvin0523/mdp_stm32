@@ -27,10 +27,12 @@ uint16_t ir_read_raw(void);
 float ir_read_voltage(void);
 /**
  * @brief Estimate distance from the sensor output voltage.
- * @return Approximate distance clamped to 10-80 centimeters. Raw zero
+ * @return IR1 distance with its own curve (ir.c), clamped to 4-80 centimeters. Raw zero
  *         (including a failed ADC read) returns 80 cm.
  */
 float ir_raw_to_distance_cm(uint16_t raw);
+/* Second IR (PC1): its own curve (ir.c) */
+float ir2_raw_to_distance_cm(uint16_t raw);
 
 float ir_read_distance_cm(void);
 

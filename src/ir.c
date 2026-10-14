@@ -103,10 +103,10 @@ uint16_t ir_sensor2_read_raw(void)
  * to the raw values in the telemetry - that one is what the car uses, and after
  * recalibrating it is the one to change. Update these too only so the OLED
  * reads the same as /ir and /ir2. */
-#define IR1_DISPLAY_A  6.23f
-#define IR1_DISPLAY_B  1.210f
-#define IR2_DISPLAY_A  6.53f
-#define IR2_DISPLAY_B  1.157f
+#define IR1_DISPLAY_A  6.69f
+#define IR1_DISPLAY_B  1.111f
+#define IR2_DISPLAY_A  6.95f
+#define IR2_DISPLAY_B  1.077f
 
 static float ir_curve_cm(uint16_t raw, float a, float b)
 {

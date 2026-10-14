@@ -7,6 +7,7 @@
  */
 
 #include "ir.h"
+#include <math.h>
 #include <stdio.h>
 
 static ADC_HandleTypeDef s_hadc1_ir;
@@ -97,7 +98,31 @@ uint16_t ir_sensor2_read_raw(void)
     return ir_read_channel(ADC_CHANNEL_11);
 }
 
-/* No raw -> cm curve here any more: the Pi applies each sensor's calibrated curve
+/* cm for the OLED ONLY. The Pi applies its own copy of each sensor's curve
  * (mdp_ros config/bridges.yaml ir1_curve / ir2_curve, fitted by `pixi run calib ir`)
- * to the raw values in the telemetry - one place to change after recalibrating,
- * no reflash (2026-10-14). The OLED shows the raw values. */
+ * to the raw values in the telemetry - that one is what the car uses, and after
+ * recalibrating it is the one to change. Update these too only so the OLED
+ * reads the same as /ir and /ir2. */
+#define IR1_DISPLAY_A  6.69f
+#define IR1_DISPLAY_B  1.111f
+#define IR2_DISPLAY_A  6.95f
+#define IR2_DISPLAY_B  1.077f
+
+static float ir_curve_cm(uint16_t raw, float a, float b)
+{
+    if (raw == 0U) {
+        return 80.0f;                  /* no light back / failed read: as far as it tells */
+    }
+    float cm = a / powf((float)raw / 4095.0f, b);
+    return cm > 80.0f ? 80.0f : (cm < 4.0f ? 4.0f : cm);   /* bridges.yaml ir_min_cm / ir_max_cm */
+}
+
+float ir_display_cm(uint16_t raw)
+{
+    return ir_curve_cm(raw, IR1_DISPLAY_A, IR1_DISPLAY_B);
+}
+
+float ir2_display_cm(uint16_t raw)
+{
+    return ir_curve_cm(raw, IR2_DISPLAY_A, IR2_DISPLAY_B);
+}

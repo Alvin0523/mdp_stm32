@@ -3,8 +3,8 @@
  * @brief Boot-time self-test sequence implementation.
  *
  * Trigger: hold PE0 (the onboard user button) down while the board resets
- * or powers on. Runs once, before the main loop, so it doesn't interfere
- * with normal operation or the host command fail-safe.
+ * or powers on, or press it while running with the motor switch (PD3) on
+ * (main.c). Wheels off the ground: phases 1-2 drive.
  *
  * Only PE8 is a GPIO-controllable LED on this board (confirmed against the
  * WHEELTEC resource-allocation PDF) - the LED1-LED4 silkscreen labels seen
@@ -30,12 +30,12 @@
  *              encoder independently. Confirms both motors AND both
  *              encoders respond.
  *   2 blinks = REV 1 REV  - same, in reverse.
- *   3 blinks = SERVO SWEEP - steering to the calibrated left max
- *              (SERVO_ANGLE_MAX_LEFT_RAD), hold, back to center, then the
- *              calibrated right max (SERVO_ANGLE_MAX_RIGHT_RAD), hold, back
- *              to center. Confirms the servo can actually reach both
- *              calibrated limits without stalling.
- *   4 blinks = STRAIGHT LINE - drives forward through the real PID loop
+ *   3 blinks = SERVO SWEEP - steering swept smoothly (1 deg / 20 ms) from
+ *              center to the calibrated left max (SERVO_ANGLE_MAX_LEFT_RAD),
+ *              across to the right max (SERVO_ANGLE_MAX_RIGHT_RAD) and back
+ *              to center (servo_sweep_full). Confirms the servo moves over
+ *              its whole range without sticking.
+ *   (4 blinks = STRAIGHT LINE, currently off) - drives forward through the real PID loop
  *              (motor_pid, not open-loop) with steering centered at the
  *              measured 1490us. End-to-end check: motors, encoders, PID,
  *              and steering center all working together.
@@ -218,6 +218,41 @@ static void servo_sweep(void)
 
     servo_set_angle(0.0f);
     HAL_Delay(300);
+}
+
+/* Smooth sweep over the whole operating range: center -> left max -> right max
+ * -> center in SELFTEST_FULL_SWEEP_STEP_DEG steps (~3 s), through
+ * servo_set_angle() so it stops at the servo.h clamps - never into the stops. */
+#define SELFTEST_FULL_SWEEP_STEP_DEG  1.0f
+#define SELFTEST_FULL_SWEEP_STEP_MS   20U
+static void servo_sweep_ramp(float from_rad, float to_rad)
+{
+    const float step = SELFTEST_FULL_SWEEP_STEP_DEG * 3.14159265f / 180.0f;
+    float a = from_rad;
+    if (to_rad >= from_rad) {
+        for (; a < to_rad; a += step) {
+            servo_set_angle(a);
+            HAL_Delay(SELFTEST_FULL_SWEEP_STEP_MS);
+        }
+    } else {
+        for (; a > to_rad; a -= step) {
+            servo_set_angle(a);
+            HAL_Delay(SELFTEST_FULL_SWEEP_STEP_MS);
+        }
+    }
+    servo_set_angle(to_rad);
+    HAL_Delay(300); /* a moment at each end, to see it got there */
+}
+
+static void servo_sweep_full(void)
+{
+    oled_show_string_8x16_offset(2, 0, "-> LEFT MAX     ");
+    servo_sweep_ramp(0.0f, SERVO_ANGLE_MAX_LEFT_RAD);
+    oled_show_string_8x16_offset(2, 0, "-> RIGHT MAX    ");
+    servo_sweep_ramp(SERVO_ANGLE_MAX_LEFT_RAD, -SERVO_ANGLE_MAX_RIGHT_RAD);
+    oled_show_string_8x16_offset(2, 0, "-> CENTER       ");
+    servo_sweep_ramp(-SERVO_ANGLE_MAX_RIGHT_RAD, 0.0f);
+    oled_show_string_8x16_offset(2, 0, "                ");
 }
 
 /* ------------------------------------------------------------------------
@@ -826,37 +861,30 @@ void selftest_run(void)
     oled_clear();
     oled_show_string_8x16_offset(0, 0, "SELF-TEST MODE");
 
-    /* Phases 1-4 (mini component test: fwd/rev 1 rev, servo sweep,
-     * straight-line PID drive) disabled while center-trim recalibration is
-     * in progress, so a plain PE0 click goes straight to the trim tool
-     * instead of sitting through ~15s of driving first. Re-enable
-     * (uncomment) once a new center value is found and set - see the git
-     * history for the original phase 1-4 block if restoring from scratch.
-     *
-     * blink_pe8(1, 150, 150);
-     * oled_show_string_8x16_offset(1, 0, "1: FWD 1 REV");
-     * drive_ticks(SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
-     *
-     * blink_pe8(2, 150, 150);
-     * oled_show_string_8x16_offset(1, 0, "2: REV 1 REV");
-     * drive_ticks(-SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
-     *
-     * blink_pe8(3, 150, 150);
-     * oled_show_string_8x16_offset(1, 0, "3: SERVO SWEEP");
-     * servo_sweep();
+    /* The routine "are the basics still working" test (2026-10-14): rear
+     * wheels one revolution forward, one back (motors + both encoders), then
+     * the steering swept smoothly over its whole operating range. Wheels off
+     * the ground - it drives. */
+    blink_pe8(1, 150, 150);
+    oled_show_string_8x16_offset(1, 0, "1: FWD 1 REV    ");
+    drive_ticks(SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
+
+    blink_pe8(2, 150, 150);
+    oled_show_string_8x16_offset(1, 0, "2: REV 1 REV    ");
+    drive_ticks(-SELFTEST_DRIVE_PCT, SELFTEST_TICKS_PER_REV);
+
+    blink_pe8(3, 150, 150);
+    oled_show_string_8x16_offset(1, 0, "3: SERVO SWEEP  ");
+    servo_sweep_full();
+
+    /* Off for now, re-enable when needed:
      *
      * blink_pe8(4, 150, 150);
-     * servo_straight_line_pid();
+     * servo_straight_line_pid();    // straight drive through the PID loop
+     *
+     * blink_pe8(2, 150, 150);
+     * servo_cal_verify_curve();     // protractor check, 5deg steps, held
      */
-
-    /* Phase 5 - verify curve against a protractor. Commands real angles
-     * (not raw pulses) in 5deg steps across the full range, showing both
-     * the commanded angle and the resulting PWM - hold each step to check
-     * the wheel's actual angle with a protractor against what's displayed.
-     * Tests the new cubic Hermite mapping on the right side (servo.c)
-     * against real measurements. Disable again (comment out) once done. */
-    blink_pe8(2, 150, 150);
-    servo_cal_verify_curve();
 
     /* ------------------------------------------------------------------
      * Remaining steering-calibration tooling below is intentionally NOT

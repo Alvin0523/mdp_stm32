@@ -82,10 +82,8 @@ int main(void)
     float battery_v = 0.0f;
     uint16_t ir_raw = 0U;
     float ir_voltage = 0.0f;
-    float ir_distance_cm = -1.0f;
     uint16_t ir2_raw = 0U;
     float ir2_voltage = 0.0f;
-    float ir2_distance_cm = -1.0f;
 
     /* PROTOCOL_COMMAND_TIMEOUT_MS: if no valid command packet arrives from
      * the host within this window, stop driving (fail safe) rather than
@@ -166,15 +164,14 @@ int main(void)
 
             /* Side IRs every telemetry frame (was the 5Hz slow tier, so 19 of
              * 20 frames repeated a stale value - too coarse for the Pi to
-             * average a scan stop or calibrate). Two 480-cycle ADC
-             * conversions at 14MHz = ~70us, <1% of this 10ms tier. The
-             * sensor itself refreshes every ~40ms; the Pi averages. */
+             * average a scan stop or calibrate). Each read averages 8
+             * 480-cycle conversions at 14MHz (ir.c) = ~0.6ms for both, ~6% of
+             * this 10ms tier. The sensor itself refreshes every ~40ms. Raw
+             * only: the Pi applies each sensor's calibrated curve. */
             ir_raw = ir_read_raw();
             ir_voltage = (float)ir_raw * (3.3f / 4095.0f);
-            ir_distance_cm = ir_raw_to_distance_cm(ir_raw);
             ir2_raw = ir_sensor2_read_raw();
             ir2_voltage = (float)ir2_raw * (3.3f / 4095.0f);
-            ir2_distance_cm = ir2_raw_to_distance_cm(ir2_raw);
 
             telemetry_packet_t telemetry = {0};
             telemetry.enc_left = encoder_get_count_a();
@@ -197,10 +194,10 @@ int main(void)
             telemetry.battery_v = battery_v; /* last slow-tier reading, see below */
             telemetry.ir_raw = ir_raw;
             telemetry.ir_voltage = ir_voltage;
-            telemetry.ir_distance_cm = ir_distance_cm;
+            telemetry.ir_distance_cm = -1.0f;   /* unused: cm is the Pi's job (bridges.yaml) */
             telemetry.ir2_raw = ir2_raw;
             telemetry.ir2_voltage = ir2_voltage;
-            telemetry.ir2_distance_cm = ir2_distance_cm;
+            telemetry.ir2_distance_cm = -1.0f;
             /* ultrasonic_update() runs every raw loop pass (not tiered, see
              * its call near the top of this loop), so this read is always
              * fresh regardless of which OLED page is selected - unlike
@@ -247,8 +244,8 @@ int main(void)
                     break;
 
                 case 1:
-                    /* Page 2: Distance Sensors (Ultrasonic & IR). */
-                    oled_render_page2(ultrasonic_cm, ir_distance_cm, ir2_distance_cm);
+                    /* Page 2: Distance Sensors (Ultrasonic cm, IR raw ADC). */
+                    oled_render_page2(ultrasonic_cm, ir_raw, ir2_raw);
                     break;
 
                 case 2:

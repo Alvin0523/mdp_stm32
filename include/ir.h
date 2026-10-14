@@ -13,33 +13,16 @@ extern "C" {
 #include "stm32f4xx_hal.h"
 
 /* Configure both inputs. Blocking reads are main-loop-only: ADC1 is shared
- * with battery.c. Both sensors use the Sharp GP2Y0A21YK 10-80 cm curve. */
+ * with battery.c. Both sensors are Sharp GP2Y0A21YK (10-80 cm). */
 void ir_init(void);
 /**
- * @brief Read analog IR sensor voltage.
- * @return Raw ADC value (0-4095, 12-bit), where higher values indicate closer objects.
+ * @brief Read IR1 (PC2), the mean of IR_OVERSAMPLE conversions (ir.c).
+ * @return Raw ADC value (0-4095, 12-bit), higher = closer; 0 if the ADC read failed.
+ *         The Pi turns it into cm with the sensor's calibrated curve (bridges.yaml).
  */
 uint16_t ir_read_raw(void);
-/**
- * @brief Read analog IR sensor voltage in volts.
- * @return Sensor output voltage (0.0 to 3.3V).
- */
-float ir_read_voltage(void);
-/**
- * @brief Estimate distance from the sensor output voltage.
- * @return IR1 distance with its own curve (ir.c), clamped to 4-80 centimeters. Raw zero
- *         (including a failed ADC read) returns 80 cm.
- */
-float ir_raw_to_distance_cm(uint16_t raw);
-/* Second IR (PC1): its own curve (ir.c) */
-float ir2_raw_to_distance_cm(uint16_t raw);
-
-float ir_read_distance_cm(void);
-
-/* Second sensor; same units and error behavior as the original API above. */
+/* Second IR (PC1): same as ir_read_raw(). */
 uint16_t ir_sensor2_read_raw(void);
-float ir_sensor2_read_voltage(void);
-float ir_sensor2_read_distance_cm(void);
 
 #ifdef __cplusplus
 }

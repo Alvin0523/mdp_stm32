@@ -23,6 +23,9 @@ void ir_init(void);
 uint16_t ir_read_raw(void);
 /* Second IR (PC1): same as ir_read_raw(). */
 uint16_t ir_sensor2_read_raw(void);
+/* Raw -> cm with a copy of the Pi's curves, for the OLED only (ir.c). */
+float ir_display_cm(uint16_t raw);
+float ir2_display_cm(uint16_t raw);
 
 #ifdef __cplusplus
 }

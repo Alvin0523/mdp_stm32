@@ -251,7 +251,7 @@ void oled_render_page1(float battery_v, uint8_t estop_state, float left_speed, f
     oled_show_string_8x16_offset(3, 12, buf);
 }
 
-void oled_render_page2(float us_cm, uint16_t ir_raw, uint16_t ir2_raw)
+void oled_render_page2(float us_cm, float ir_cm, float ir2_cm)
 {
     char buf[16];
     char numbuf[8];
@@ -270,10 +270,10 @@ void oled_render_page2(float us_cm, uint16_t ir_raw, uint16_t ir2_raw)
     snprintf(buf, sizeof(buf), "Ultra:%scm", numbuf);
     oled_show_string_8x16_offset(1, 12, buf);
 
-    /* Raw ADC (0-4095, higher = closer): the cm curve lives on the Pi. */
-    snprintf(buf, sizeof(buf), "IR1 raw: %4u", (unsigned)ir_raw);
+    /* ir.c's display copy of the Pi's curves (bridges.yaml). */
+    snprintf(buf, sizeof(buf), "IR1:  %5.1fcm", (double)ir_cm);
     oled_show_string_8x16_offset(2, 12, buf);
-    snprintf(buf, sizeof(buf), "IR2 raw: %4u", (unsigned)ir2_raw);
+    snprintf(buf, sizeof(buf), "IR2:  %5.1fcm", (double)ir2_cm);
     oled_show_string_8x16_offset(3, 12, buf);
 }
 

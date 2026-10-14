@@ -244,8 +244,8 @@ int main(void)
                     break;
 
                 case 1:
-                    /* Page 2: Distance Sensors (Ultrasonic cm, IR raw ADC). */
-                    oled_render_page2(ultrasonic_cm, ir_raw, ir2_raw);
+                    /* Page 2: Distance Sensors (Ultrasonic & IR, cm). */
+                    oled_render_page2(ultrasonic_cm, ir_display_cm(ir_raw), ir2_display_cm(ir2_raw));
                     break;
 
                 case 2:

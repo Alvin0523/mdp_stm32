@@ -57,12 +57,12 @@ typedef struct {
     uint8_t  imu_ready;     /* 1 = IMU detected and operational */
     uint8_t  estop;         /* 1 = e-stop engaged (PD3) */
     float    battery_v;     /* Battery pack voltage (V), PB0/ADC1_CH8 */
-    uint16_t ir_raw;        /* IR ADC reading (0-4095), PC2/ADC1_CH12 */
+    uint16_t ir_raw;        /* IR ADC reading (0-4095, mean of 8), PC2/ADC1_CH12 - the Pi applies the curve */
     float    ir_voltage;    /* IR sensor output voltage (V) */
-    float    ir_distance_cm; /* Estimated IR distance (cm) */
+    float    ir_distance_cm; /* Unused, always -1: the cm curve is on the Pi (bridges.yaml) */
     uint16_t ir2_raw;       /* Second IR ADC reading, PC1/ADC1_CH11 */
     float    ir2_voltage;   /* Second IR sensor output voltage (V) */
-    float    ir2_distance_cm; /* Second IR estimated distance (cm) */
+    float    ir2_distance_cm; /* Unused, always -1 (as ir_distance_cm) */
     float    ultrasonic_cm;  /* HC-SR04 distance (cm), TIM5 input capture on
                                * PA2/PA3 (ultrasonic.c) - negative means no
                                * valid echo (disabled, out of range, or the

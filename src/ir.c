@@ -7,7 +7,6 @@
  */
 
 #include "ir.h"
-#include <math.h>
 #include <stdio.h>
 
 static ADC_HandleTypeDef s_hadc1_ir;
@@ -38,6 +37,12 @@ void ir_init(void)
     HAL_ADC_Init(&s_hadc1_ir);
 }
 
+/* Readings averaged per call: the Sharp's output carries ADC noise and ripple.
+ * 8 conversions of 480 cycles at 14 MHz = ~0.3 ms per sensor, so no lag (the
+ * sensor itself only refreshes every ~40 ms) - unlike a moving average over
+ * frames, which would delay the edges task 2's IR fixes rely on (2026-10-14). */
+#define IR_OVERSAMPLE 8U
+
 /* ADC1 is shared with battery.c. Read sequentially from the main loop;
  * select the channel on every read and stop before the next user. */
 static uint16_t ir_read_channel(uint32_t channel)
@@ -56,31 +61,30 @@ static uint16_t ir_read_channel(uint32_t channel)
         return 0U;
     }
 
-    status = HAL_ADC_Start(&s_hadc1_ir);
-    if (status != HAL_OK) {
-        printf("ADC start failed: %d\r\n", status);
-        return 0U;
-    }
+    uint32_t sum = 0U;
+    for (uint32_t i = 0U; i < IR_OVERSAMPLE; i++) {
+        status = HAL_ADC_Start(&s_hadc1_ir);
+        if (status != HAL_OK) {
+            printf("ADC start failed: %d\r\n", status);
+            return 0U;
+        }
 
-    status = HAL_ADC_PollForConversion(&s_hadc1_ir, 10U);
-    if (status != HAL_OK) {
-        printf("ADC poll failed: %d, error=0x%08lx\r\n",
-               status,
-               (unsigned long)HAL_ADC_GetError(&s_hadc1_ir));
+        status = HAL_ADC_PollForConversion(&s_hadc1_ir, 10U);
+        if (status != HAL_OK) {
+            printf("ADC poll failed: %d, error=0x%08lx\r\n",
+                   status,
+                   (unsigned long)HAL_ADC_GetError(&s_hadc1_ir));
 
+            HAL_ADC_Stop(&s_hadc1_ir);
+            return 0U;
+        }
+
+        sum += HAL_ADC_GetValue(&s_hadc1_ir);
         HAL_ADC_Stop(&s_hadc1_ir);
-        return 0U;
     }
 
-    uint16_t raw = (uint16_t)HAL_ADC_GetValue(&s_hadc1_ir);
-    HAL_ADC_Stop(&s_hadc1_ir);
-
-    /* Was unconditional on every read (5Hz, forever) - drowned out anything
-     * else on USART1. The distance is visible via ROS telemetry and the
-     * OLED now, so this isn't needed for normal operation. Re-enable only
-     * for standalone bench bring-up with no Pi/ROS connected. */
-    /* printf("ADC raw: %u\r\n", raw); */
-    return raw;
+    /* Rounded mean, still 0-4095. */
+    return (uint16_t)((sum + IR_OVERSAMPLE / 2U) / IR_OVERSAMPLE);
 }
 
 uint16_t ir_read_raw(void)
@@ -93,61 +97,7 @@ uint16_t ir_sensor2_read_raw(void)
     return ir_read_channel(ADC_CHANNEL_11);
 }
 
-float ir_sensor2_read_voltage(void)
-{
-    return (float)ir_sensor2_read_raw() / 4095.0f * 3.3f;
-}
-
-float ir_read_voltage(void)
-{
-    uint16_t raw = ir_read_raw();
-    return (float)raw / 4095.0f * 3.3f;
-}
-
-/* Each sensor's own curve, distance = A / (raw/4095)^B, from `pixi run calib ir`
- * on the car (2026-10-07, after the IR mounts were fixed; IR1 within 1.0 cm and
- * IR2 within 0.4 cm at 13-25 cm). The SAME numbers as mdp_ros
- * src/mdp_bringup/config/bridges.yaml (ir1_curve / ir2_curve), which the Pi
- * applies to the raw values it gets in the telemetry - so the OLED shows what
- * /ir and /ir2 show. Recalibrated: change both places. */
-#define IR1_CURVE_A            6.23f
-#define IR1_CURVE_B            1.210f
-#define IR2_CURVE_A            6.53f
-#define IR2_CURVE_B            1.157f
-#define IR_DISTANCE_MIN_CM     4.0f    /* as bridges.yaml ir_min_cm (Sharp is unreliable below ~7 cm) */
-#define IR_DISTANCE_MAX_CM     80.0f
-
-static float ir_curve_cm(uint16_t raw, float a, float b)
-{
-    if (raw == 0U) {
-        return IR_DISTANCE_MAX_CM;
-    }
-    float distance = a / powf((float)raw / 4095.0f, b);
-    if (distance > IR_DISTANCE_MAX_CM) {
-        distance = IR_DISTANCE_MAX_CM;
-    }
-    if (distance < IR_DISTANCE_MIN_CM) {
-        distance = IR_DISTANCE_MIN_CM;
-    }
-    return distance;
-}
-
-float ir_raw_to_distance_cm(uint16_t raw)
-{
-    return ir_curve_cm(raw, IR1_CURVE_A, IR1_CURVE_B);
-}
-
-float ir2_raw_to_distance_cm(uint16_t raw)
-{
-    return ir_curve_cm(raw, IR2_CURVE_A, IR2_CURVE_B);
-}
-
-float ir_sensor2_read_distance_cm(void)
-{
-    return ir2_raw_to_distance_cm(ir_sensor2_read_raw());
-}
-
-float ir_read_distance_cm(void)
-{
-    return ir_raw_to_distance_cm(ir_read_raw());
-}
+/* No raw -> cm curve here any more: the Pi applies each sensor's calibrated curve
+ * (mdp_ros config/bridges.yaml ir1_curve / ir2_curve, fitted by `pixi run calib ir`)
+ * to the raw values in the telemetry - one place to change after recalibrating,
+ * no reflash (2026-10-14). The OLED shows the raw values. */

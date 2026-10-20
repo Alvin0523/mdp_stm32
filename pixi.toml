@@ -6,17 +6,14 @@ platforms = ["linux-64", "osx-arm64", "linux-aarch64"]
 version = "0.1.0"
 
 [tasks]
-## Hardware Check & Probe (via PlatformIO's bundled OpenOCD)
-probe = { cmd = 'pio pkg exec -p tool-openocd -- openocd -f interface/stlink.cfg -f target/stm32f4x.cfg -c "init; targets; exit"', description = "Detect connected ST-LINK/V2 probe and STM32F4 chip via OpenOCD" }
+probe = { cmd = 'pio pkg exec -p tool-openocd -- openocd -f interface/stlink.cfg -f target/stm32f4x.cfg -c "init; targets; exit"', description = "Detect the ST-Link and the STM32 (OpenOCD)" }
 
-## App Build & Flash (PlatformIO)
 build = { cmd = "pio run", description = "Build firmware via PlatformIO" }
-flash = { cmd = "pio run -t upload", description = "Flash the firmware over USB: the board's UART1 port (/dev/stm32_flash), no ST-Link" }
+flash = { cmd = "pio run -t upload", description = "Flash over USB (UART1, /dev/stm32_flash)" }
 flash-stlink = { cmd = "pio run -e stlink -t upload", description = "Flash the firmware with an ST-Link on the SWD header" }
 monitor = { cmd = "pio device monitor", description = "Debug printf on UART1 (/dev/stm32_flash, platformio.ini)" }
 
-## Host setup
-udev = { cmd = "udev/install.sh", description = "Install the udev rule: /dev/stm32_serial (UART3, car link) and /dev/stm32_flash (UART1, flashing) - once per machine, asks for sudo" }
+udev = { cmd = "udev/install.sh", description = "Once per machine: udev rule for /dev/stm32_serial + /dev/stm32_flash (sudo)" }
 
 [dependencies]
 pyserial = "*"
